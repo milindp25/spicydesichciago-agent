@@ -31,3 +31,13 @@ data/
 # Caddy local
 caddy_data/
 caddy_config/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
