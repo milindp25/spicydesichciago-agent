@@ -84,3 +84,4 @@ class Tenant(BaseModel):
     location_overrides: dict[str, dict[str, Any]]
     faq: str
     location_notes: str
+    specials: list[MenuItem] = Field(default_factory=list)

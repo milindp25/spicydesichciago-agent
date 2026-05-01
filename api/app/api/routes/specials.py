@@ -15,7 +15,7 @@ async def list_specials(
 ) -> dict[str, Any]:
     _ = location_id
     state = get_state(request)
-    if tenant not in state.tenants.tenants:
+    t = state.tenants.tenants.get(tenant)
+    if t is None:
         raise HTTPException(404, "tenant not found")
-    items = await state.catalog_service.get_specials()
-    return {"items": [i.model_dump() for i in items]}
+    return {"items": [item.model_dump() for item in t.specials]}

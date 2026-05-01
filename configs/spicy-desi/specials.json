@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Pani Puri",
+    "description": "Crispy semolina shells filled with spiced potato, chickpeas, and tangy tamarind water",
+    "price": "$8.99",
+    "category": "Chaat",
+    "dietary_tags": ["vegetarian"]
+  },
+  {
+    "name": "Veg Momos",
+    "description": "Steamed dumplings filled with cabbage, carrots, and herbs, served with spicy chutney",
+    "price": "$9.99",
+    "category": "Momos",
+    "dietary_tags": ["vegetarian"]
+  },
+  {
+    "name": "Hakka Noodles",
+    "description": "Indo-Chinese stir-fried noodles with vegetables and house sauce",
+    "price": "$11.99",
+    "category": "Indo-Chinese",
+    "dietary_tags": ["vegetarian"]
+  },
+  {
+    "name": "Masala Dosa",
+    "description": "Crispy rice and lentil crepe filled with spiced potato, served with sambar and chutneys",
+    "price": "$10.99",
+    "category": "South Indian",
+    "dietary_tags": ["vegetarian", "gluten-free"]
+  },
+  {
+    "name": "Mango Lassi",
+    "description": "Sweet yogurt drink blended with ripe mango",
+    "price": "$4.99",
+    "category": "Drinks",
+    "dietary_tags": ["vegetarian", "gluten-free"]
+  }
+]

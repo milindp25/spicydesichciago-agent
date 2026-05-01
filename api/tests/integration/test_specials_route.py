@@ -1,33 +1,45 @@
 from collections.abc import Callable
-from typing import Any
 
 from fastapi.testclient import TestClient
 
 from app.api.dependencies import AppState
-
-ITEMS: list[dict[str, Any]] = [
-    {
-        "id": "I1",
-        "type": "ITEM",
-        "item_data": {
-            "name": "Mango Lassi",
-            "categories": [{"id": "SPECIALS"}],
-            "variations": [
-                {
-                    "id": "V1",
-                    "item_variation_data": {"price_money": {"amount": 499, "currency": "USD"}},
-                }
-            ],
-        },
-    }
-]
+from app.domain.models import MenuItem
 
 
-def test_returns_specials(
+def test_returns_specials_from_tenant_config(
     client_factory: Callable[..., tuple[TestClient, AppState]],
     auth_headers: dict[str, str],
 ) -> None:
-    c, _ = client_factory(catalog_items=ITEMS)
+    c, state = client_factory()
+    state.tenants.tenants["spicy-desi"].specials.append(
+        MenuItem(
+            name="Mango Lassi",
+            description="sweet yogurt drink",
+            price="$4.99",
+            category="Drinks",
+            dietary_tags=["vegetarian"],
+        )
+    )
     r = c.get("/api/locations/L1/specials?tenant=spicy-desi", headers=auth_headers)
     assert r.status_code == 200
-    assert r.json()["items"][0]["name"] == "Mango Lassi"
+    body = r.json()
+    assert body["items"][0]["name"] == "Mango Lassi"
+
+
+def test_empty_specials_returns_empty_list(
+    client_factory: Callable[..., tuple[TestClient, AppState]],
+    auth_headers: dict[str, str],
+) -> None:
+    c, _ = client_factory()
+    r = c.get("/api/locations/L1/specials?tenant=spicy-desi", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json() == {"items": []}
+
+
+def test_unknown_tenant_returns_404(
+    client_factory: Callable[..., tuple[TestClient, AppState]],
+    auth_headers: dict[str, str],
+) -> None:
+    c, _ = client_factory()
+    r = c.get("/api/locations/L1/specials?tenant=nope", headers=auth_headers)
+    assert r.status_code == 404
