@@ -37,7 +37,7 @@ cd api && source .venv/bin/activate
 pytest
 ```
 
-Currently 48 tests (28 unit + 20 integration), all hermetic — no live Square calls.
+Currently 60 tests (28 unit + 32 integration), all hermetic — no live Square calls.
 
 ## Architecture
 
@@ -85,7 +85,18 @@ All `/api/*` endpoints require `X-Tools-Auth: $TOOLS_SHARED_SECRET`. Tenant is s
 | GET | `/healthz` | Liveness (no auth) |
 | POST | `/api/webhooks/square` | Square webhook (HMAC-verified) — invalidates cache |
 
-## What's deferred
+## Project status
 
-- **Plan 2:** Pipecat voice agent + real Twilio SMS in `/api/messages` + real Twilio REST live-call redirect in `/api/transfers` + Hindi/Telugu Cartesia tuning
-- **Plan 3:** Oracle Cloud deployment (systemd, Caddy, runbook), R2 backups of `data/events.jsonl`, end-to-end multilingual call testing, soft launch
+| Plan | Status | What it covers |
+|---|---|---|
+| **Plan 1** — FastAPI + Square API | ✅ Shipped (60 tests, 0 CVEs, 0 bandit issues) | Locations, hours, address, menu, specials, pickup, take-message + transfer skeletons |
+| **Plan 2** — Pipecat voice agent + Twilio | 📋 Designed, ready to implement — see [docs/superpowers/plans/2026-05-01-plan-2-pipecat-voice-agent.md](docs/superpowers/plans/2026-05-01-plan-2-pipecat-voice-agent.md) | Real Twilio SMS, live-call transfer, Pipecat pipeline (Deepgram + Groq + Cartesia), system prompt, end-to-end via ngrok |
+| **Plan 3** — Deploy + soft launch | 📋 To be designed after Plan 2 | Oracle Cloud, Caddy + systemd, R2 backups, Telugu evaluation, multilingual call testing, soft launch |
+
+## Resuming work in a new session
+
+Tell the new session:
+
+> "Read `docs/superpowers/plans/2026-05-01-plan-2-pipecat-voice-agent.md` and start at Phase 0. Plan 1 is done and on `main` (60 tests passing). Confirmed assumptions: English + Hindi only for v1, single Twilio number → spicy-desi tenant."
+
+The agent should pick it up from there. Phase 0 (account provisioning) is operator-only — it'll wait until you have Twilio + Groq + Deepgram + Cartesia keys ready.
