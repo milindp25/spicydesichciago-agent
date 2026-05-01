@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from dataclasses import dataclass
 
 from fastapi import Header, HTTPException, Request, status
@@ -33,14 +34,6 @@ def require_tools_auth(
     x_tools_auth: str | None = Header(default=None),
 ) -> None:
     expected = get_state(request).tools_shared_secret
-    if not x_tools_auth or not _consteq(x_tools_auth, expected):
+    provided = x_tools_auth or ""
+    if not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized")
-
-
-def _consteq(a: str, b: str) -> bool:
-    if len(a) != len(b):
-        return False
-    result = 0
-    for x, y in zip(a.encode(), b.encode(), strict=False):
-        result |= x ^ y
-    return result == 0

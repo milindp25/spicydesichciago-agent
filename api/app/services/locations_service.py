@@ -136,7 +136,8 @@ class LocationsService:
         if active is not None:
             open_str = _hhmm(active.get("start_local_time"))
             close_str = _hhmm(active.get("end_local_time"))
-            assert open_str is not None and close_str is not None
+            if open_str is None or close_str is None:
+                raise RuntimeError("active period missing start/end local time")
             remaining = _to_minutes(close_str) - _to_minutes(cur_str)
             status = HoursStatus.CLOSING_SOON if remaining <= 30 else HoursStatus.OPEN
             return HoursToday(
