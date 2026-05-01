@@ -1,0 +1,33 @@
+# Node
+node_modules/
+dist/
+*.log
+.npm/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Tests / coverage
+coverage/
+.vitest/
+
+# DB
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# Caddy local
+caddy_data/
+caddy_config/
