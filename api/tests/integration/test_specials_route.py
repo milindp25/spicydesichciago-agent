@@ -20,7 +20,7 @@ def test_returns_specials_from_tenant_config(
             dietary_tags=["vegetarian"],
         )
     )
-    r = c.get("/api/locations/L1/specials?tenant=spicy-desi", headers=auth_headers)
+    r = c.get("/api/specials?tenant=spicy-desi", headers=auth_headers)
     assert r.status_code == 200
     body = r.json()
     assert body["items"][0]["name"] == "Mango Lassi"
@@ -31,7 +31,7 @@ def test_empty_specials_returns_empty_list(
     auth_headers: dict[str, str],
 ) -> None:
     c, _ = client_factory()
-    r = c.get("/api/locations/L1/specials?tenant=spicy-desi", headers=auth_headers)
+    r = c.get("/api/specials?tenant=spicy-desi", headers=auth_headers)
     assert r.status_code == 200
     assert r.json() == {"items": []}
 
@@ -41,5 +41,5 @@ def test_unknown_tenant_returns_404(
     auth_headers: dict[str, str],
 ) -> None:
     c, _ = client_factory()
-    r = c.get("/api/locations/L1/specials?tenant=nope", headers=auth_headers)
+    r = c.get("/api/specials?tenant=nope", headers=auth_headers)
     assert r.status_code == 404

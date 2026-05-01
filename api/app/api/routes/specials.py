@@ -9,11 +9,8 @@ from app.api.dependencies import get_state, require_tools_auth
 router = APIRouter(prefix="/api", dependencies=[Depends(require_tools_auth)])
 
 
-@router.get("/locations/{location_id}/specials")
-async def list_specials(
-    request: Request, location_id: str, tenant: str = Query(..., min_length=1)
-) -> dict[str, Any]:
-    _ = location_id
+@router.get("/specials")
+async def list_specials(request: Request, tenant: str = Query(..., min_length=1)) -> dict[str, Any]:
     state = get_state(request)
     t = state.tenants.tenants.get(tenant)
     if t is None:

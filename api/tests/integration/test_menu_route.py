@@ -30,7 +30,7 @@ def test_returns_match(
 ) -> None:
     c, _ = client_factory(catalog_items=ITEMS)
     r = c.get(
-        "/api/locations/L1/menu/search?tenant=spicy-desi&q=tikka",
+        "/api/menu/search?tenant=spicy-desi&q=tikka",
         headers=auth_headers,
     )
     assert r.status_code == 200
@@ -43,5 +43,14 @@ def test_requires_q(
     auth_headers: dict[str, str],
 ) -> None:
     c, _ = client_factory(catalog_items=ITEMS)
-    r = c.get("/api/locations/L1/menu/search?tenant=spicy-desi", headers=auth_headers)
+    r = c.get("/api/menu/search?tenant=spicy-desi", headers=auth_headers)
     assert r.status_code == 400
+
+
+def test_unknown_tenant_returns_404(
+    client_factory: Callable[..., tuple[TestClient, AppState]],
+    auth_headers: dict[str, str],
+) -> None:
+    c, _ = client_factory(catalog_items=ITEMS)
+    r = c.get("/api/menu/search?tenant=nope&q=tikka", headers=auth_headers)
+    assert r.status_code == 404

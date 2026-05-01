@@ -58,17 +58,31 @@ infrastructure/       Adapters: config, logger, cache, Square SDK,
 
 All `/api/*` endpoints require `X-Tools-Auth: $TOOLS_SHARED_SECRET`. Tenant is selected via `?tenant=<slug>`.
 
+### Voice-agent endpoints (no IDs ever — system resolves "today's pickup" automatically)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/pickup/today` | Today's active pickup spot — name, address, hours, speakable summary |
+| GET | `/api/menu/search?q=` | Menu search via Square Catalog |
+| GET | `/api/specials` | Today's specials (from tenant config) |
+| POST | `/api/messages` | Record a take-message; appends to JSONL (Twilio SMS in Plan 2) |
+| POST | `/api/transfers` | Decide transfer-vs-take-message based on owner-available hours |
+| POST | `/api/calls/{sid}/event` | Generic call-event log append |
+
+### Admin-panel endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/locations` | List Square locations (for the dropdown) |
+| GET | `/api/locations/{id}/hours/today` | Per-location today's hours (debug / admin views) |
+| GET | `/api/locations/{id}/address` | Per-location address |
+| POST | `/api/admin/pickup` | Set today's active pickup spot |
+
+### System
+
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/healthz` | Liveness (no auth) |
-| GET | `/api/locations` | List Square locations |
-| GET | `/api/locations/{id}/hours/today` | Today's hours + status (open / closed / closing_soon) |
-| GET | `/api/locations/{id}/address` | Formatted address + coords |
-| GET | `/api/locations/{id}/menu/search?q=` | Menu search via Square Catalog |
-| GET | `/api/locations/{id}/specials` | Items in the SPECIALS category |
-| POST | `/api/messages` | Record a take-message; appends to JSONL (Twilio SMS in Plan 2) |
-| POST | `/api/transfers` | Decide transfer-vs-take-message based on owner-available hours (Twilio REST in Plan 2) |
-| POST | `/api/calls/{sid}/event` | Generic call-event log append |
 | POST | `/api/webhooks/square` | Square webhook (HMAC-verified) — invalidates cache |
 
 ## What's deferred
