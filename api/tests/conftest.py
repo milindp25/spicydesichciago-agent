@@ -12,9 +12,11 @@ from app.api.dependencies import AppState
 from app.domain.models import OwnerAvailable, Tenant
 from app.infrastructure.cache import TtlCache
 from app.infrastructure.event_log import JsonlEventLog
+from app.infrastructure.pickup_state import PickupStateStore
 from app.infrastructure.tenant_registry import TenantRegistry
 from app.services.catalog_service import CatalogService
 from app.services.locations_service import LocationsService
+from app.services.pickup_service import PickupService
 from tests.helpers.square_mock import FakeCatalogApi, FakeLocationsApi
 
 SHARED_SECRET = "s" * 32
@@ -66,11 +68,14 @@ def client_factory(
             specials_category_id="SPECIALS",
         )
         log = JsonlEventLog(str(tmp_path / "events.jsonl"))
+        pickup_store = PickupStateStore(str(tmp_path / "pickup-state.json"))
+        pickup_svc = PickupService(store=pickup_store, locations=loc_svc)
         state = AppState(
             tools_shared_secret=SHARED_SECRET,
             tenants=registry,
             locations_service=loc_svc,
             catalog_service=cat_svc,
+            pickup_service=pickup_svc,
             event_log=log,
             square_webhook_signature_key="key",
             square_webhook_url="https://example.com/api/webhooks/square",

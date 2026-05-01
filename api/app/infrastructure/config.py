@@ -26,9 +26,7 @@ class AppSettings(BaseSettings):
     )
     square_webhook_url: str = Field("", alias="SQUARE_WEBHOOK_URL")
 
-    square_specials_category_id: str = Field(
-        "SPECIALS", alias="SQUARE_SPECIALS_CATEGORY_ID"
-    )
+    square_specials_category_id: str = Field("SPECIALS", alias="SQUARE_SPECIALS_CATEGORY_ID")
 
     configs_dir: str = Field(..., alias="CONFIGS_DIR", min_length=1)
     event_log_path: str = Field("./data/events.jsonl", alias="EVENT_LOG_PATH")

@@ -59,6 +59,20 @@ class TransferDecision(BaseModel):
     target: str | None = None
 
 
+class PickupToday(BaseModel):
+    location_id: str
+    name: str
+    address: str
+    set_at: str
+    set_for_date: str
+    hours: HoursToday | None = None
+
+
+class SetPickupRequest(BaseModel):
+    tenant: str
+    location_id: str
+
+
 class EventRecord(BaseModel):
     model_config = ConfigDict(extra="allow")
     call_sid: str

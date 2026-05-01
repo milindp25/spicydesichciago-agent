@@ -13,6 +13,7 @@ from app.api.routes import (
     locations,
     menu,
     messages,
+    pickup,
     specials,
     transfers,
     webhooks_square,
@@ -36,5 +37,6 @@ def build_app(deps: AppState) -> FastAPI:
     app.include_router(messages.router)
     app.include_router(transfers.router)
     app.include_router(events.router)
+    app.include_router(pickup.router)
     app.include_router(webhooks_square.router)
     return app

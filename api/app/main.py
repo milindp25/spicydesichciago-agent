@@ -13,6 +13,7 @@ from app.infrastructure.cache import TtlCache  # noqa: E402
 from app.infrastructure.config import AppSettings  # noqa: E402
 from app.infrastructure.event_log import JsonlEventLog  # noqa: E402
 from app.infrastructure.logger import configure_logging, get_logger  # noqa: E402
+from app.infrastructure.pickup_state import PickupStateStore  # noqa: E402
 from app.infrastructure.square_client import (  # noqa: E402
     SquareCatalogAdapter,
     SquareLocationsAdapter,
@@ -21,6 +22,7 @@ from app.infrastructure.square_client import (  # noqa: E402
 from app.infrastructure.tenant_registry import load_tenants  # noqa: E402
 from app.services.catalog_service import CatalogService  # noqa: E402
 from app.services.locations_service import LocationsService  # noqa: E402
+from app.services.pickup_service import PickupService  # noqa: E402
 
 
 def _build() -> FastAPI:
@@ -42,11 +44,14 @@ def _build() -> FastAPI:
         cache=TtlCache(ttl_seconds=5 * 60),
         specials_category_id=settings.square_specials_category_id,
     )
+    pickup_store = PickupStateStore("./data/pickup-state.json")
+    pickup_service = PickupService(store=pickup_store, locations=locations_service)
     state = AppState(
         tools_shared_secret=settings.tools_shared_secret,
         tenants=load_tenants(settings.configs_dir),
         locations_service=locations_service,
         catalog_service=catalog_service,
+        pickup_service=pickup_service,
         event_log=JsonlEventLog(settings.event_log_path),
         square_webhook_signature_key=settings.square_webhook_signature_key,
         square_webhook_url=settings.square_webhook_url,
