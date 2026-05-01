@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -12,12 +13,15 @@ router = APIRouter(prefix="/api", dependencies=[Depends(require_tools_auth)])
 
 @router.get("/pickup/today")
 async def get_pickup_today(
-    request: Request, tenant: str = Query(..., min_length=1)
+    request: Request,
+    tenant: str = Query(..., min_length=1),
+    now: str | None = Query(None),
 ) -> dict[str, Any]:
     state = get_state(request)
     if tenant not in state.tenants.tenants:
         raise HTTPException(404, "tenant not found")
-    pickup = await state.pickup_service.get_today(tenant)
+    now_dt = datetime.fromisoformat(now.replace("Z", "+00:00")) if now else None
+    pickup = await state.pickup_service.get_today(tenant, now=now_dt)
     if pickup is None:
         return {"pickup": None}
     return {"pickup": pickup.model_dump()}

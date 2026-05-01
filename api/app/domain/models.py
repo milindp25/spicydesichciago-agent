@@ -22,7 +22,13 @@ class HoursToday(BaseModel):
     open: str | None
     close: str | None
     status: HoursStatus
-    next_open: str | None = None
+    open_human: str | None = None
+    close_human: str | None = None
+    tz_label: str = "Central"
+    is_open_now: bool = False
+    next_open_weekday: str | None = None
+    next_open_time: str | None = None
+    next_open_time_human: str | None = None
 
 
 class AddressInfo(BaseModel):
@@ -66,6 +72,7 @@ class PickupToday(BaseModel):
     set_at: str
     set_for_date: str
     hours: HoursToday | None = None
+    summary: str = ""
 
 
 class SetPickupRequest(BaseModel):
