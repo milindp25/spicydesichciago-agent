@@ -17,15 +17,17 @@ def _format_price(amount: int | None, currency: str | None) -> str:
 
 
 def _to_menu_item(raw: dict[str, Any]) -> MenuItem:
-    item_data = raw.get("item_data", {})
+    item_data = raw.get("item_data") or {}
     variations = item_data.get("variations") or []
     price_money = (
-        variations[0].get("item_variation_data", {}).get("price_money", {}) if variations else {}
+        (variations[0].get("item_variation_data") or {}).get("price_money") or {}
+        if variations
+        else {}
     )
     categories = item_data.get("categories") or []
     return MenuItem(
-        name=item_data.get("name", ""),
-        description=item_data.get("description", ""),
+        name=item_data.get("name") or "",
+        description=item_data.get("description") or "",
         price=_format_price(price_money.get("amount"), price_money.get("currency")),
         category=categories[0]["id"] if categories else None,
         dietary_tags=[],

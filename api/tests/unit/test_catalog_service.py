@@ -64,3 +64,37 @@ async def test_specials_returns_only_tagged(svc: CatalogService) -> None:
     r = await svc.get_specials()
     assert len(r) == 1
     assert r[0].name == "Paneer Tikka"
+
+
+async def test_handles_null_description_and_categories() -> None:
+    """Square sometimes returns description/categories as null (not absent)."""
+    items_with_nulls: list[dict[str, Any]] = [
+        {
+            "id": "I3",
+            "type": "ITEM",
+            "item_data": {
+                "name": "Mystery Item",
+                "description": None,
+                "categories": None,
+                "variations": [
+                    {
+                        "id": "V3",
+                        "item_variation_data": {
+                            "price_money": {"amount": 999, "currency": "USD"}
+                        },
+                    }
+                ],
+            },
+        }
+    ]
+    svc = CatalogService(
+        api=FakeCatalogApi(items_with_nulls),
+        cache=TtlCache(ttl_seconds=60),
+        specials_category_id="SPECIALS",
+    )
+    r = await svc.search_menu("mystery")
+    assert len(r) == 1
+    assert r[0].name == "Mystery Item"
+    assert r[0].description == ""
+    assert r[0].category is None
+    assert r[0].price == "$9.99"
