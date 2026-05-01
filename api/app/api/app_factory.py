@@ -25,9 +25,7 @@ def build_app(deps: AppState) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def _on_validation_error(_: object, exc: RequestValidationError) -> JSONResponse:
-        return JSONResponse(
-            {"error": "invalid request", "details": exc.errors()}, status_code=400
-        )
+        return JSONResponse({"error": "invalid request", "details": exc.errors()}, status_code=400)
 
     app.include_router(health.router)
     app.include_router(locations.router)

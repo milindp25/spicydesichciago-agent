@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class HoursStatus(str, Enum):
+class HoursStatus(StrEnum):
     OPEN = "open"
     CLOSED = "closed"
     CLOSING_SOON = "closing_soon"

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -7,7 +7,6 @@ from app.domain.models import HoursStatus
 from app.infrastructure.cache import TtlCache
 from app.services.locations_service import LocationsService
 from tests.helpers.square_mock import FakeLocationsApi
-
 
 SAMPLE: list[dict[str, Any]] = [
     {
@@ -47,7 +46,7 @@ async def test_list_locations(svc: LocationsService) -> None:
 
 
 async def test_hours_today_open_at_2pm_monday(svc: LocationsService) -> None:
-    monday2pm = datetime(2026, 1, 5, 20, 0, tzinfo=timezone.utc)
+    monday2pm = datetime(2026, 1, 5, 20, 0, tzinfo=UTC)
     h = await svc.get_hours_today("L1", now=monday2pm)
     assert h.open == "11:00"
     assert h.close == "21:30"
@@ -55,7 +54,7 @@ async def test_hours_today_open_at_2pm_monday(svc: LocationsService) -> None:
 
 
 async def test_hours_today_closed_early_morning(svc: LocationsService) -> None:
-    monday6am = datetime(2026, 1, 5, 12, 0, tzinfo=timezone.utc)
+    monday6am = datetime(2026, 1, 5, 12, 0, tzinfo=UTC)
     h = await svc.get_hours_today("L1", now=monday6am)
     assert h.status == HoursStatus.CLOSED
 

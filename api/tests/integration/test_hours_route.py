@@ -45,7 +45,5 @@ def test_unknown_location_returns_404(
     auth_headers: dict[str, str],
 ) -> None:
     c, _ = client_factory(locations=SAMPLE)
-    r = c.get(
-        "/api/locations/Lnope/hours/today?tenant=spicy-desi", headers=auth_headers
-    )
+    r = c.get("/api/locations/Lnope/hours/today?tenant=spicy-desi", headers=auth_headers)
     assert r.status_code == 404

@@ -6,7 +6,6 @@ from app.infrastructure.cache import TtlCache
 from app.services.catalog_service import CatalogService
 from tests.helpers.square_mock import FakeCatalogApi
 
-
 ITEMS: list[dict[str, Any]] = [
     {
         "id": "I1",
@@ -18,9 +17,7 @@ ITEMS: list[dict[str, Any]] = [
             "variations": [
                 {
                     "id": "V1",
-                    "item_variation_data": {
-                        "price_money": {"amount": 1899, "currency": "USD"}
-                    },
+                    "item_variation_data": {"price_money": {"amount": 1899, "currency": "USD"}},
                 }
             ],
         },
@@ -35,9 +32,7 @@ ITEMS: list[dict[str, Any]] = [
             "variations": [
                 {
                     "id": "V2",
-                    "item_variation_data": {
-                        "price_money": {"amount": 1599, "currency": "USD"}
-                    },
+                    "item_variation_data": {"price_money": {"amount": 1599, "currency": "USD"}},
                 }
             ],
         },

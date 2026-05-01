@@ -15,9 +15,7 @@ ITEMS: list[dict[str, Any]] = [
             "variations": [
                 {
                     "id": "V1",
-                    "item_variation_data": {
-                        "price_money": {"amount": 499, "currency": "USD"}
-                    },
+                    "item_variation_data": {"price_money": {"amount": 499, "currency": "USD"}},
                 }
             ],
         },

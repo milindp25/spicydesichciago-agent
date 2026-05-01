@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -48,12 +48,10 @@ class LocationsService:
             for loc in await self._all()
         ]
 
-    async def get_hours_today(
-        self, location_id: str, now: datetime | None = None
-    ) -> HoursToday:
+    async def get_hours_today(self, location_id: str, now: datetime | None = None) -> HoursToday:
         loc = await self._find(location_id)
         tz = ZoneInfo(loc.get("timezone") or "America/Chicago")
-        cur = (now or datetime.now(timezone.utc)).astimezone(tz)
+        cur = (now or datetime.now(UTC)).astimezone(tz)
         dow = cur.strftime("%a").upper()
         period = next(
             (

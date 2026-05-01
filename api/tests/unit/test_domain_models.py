@@ -32,9 +32,7 @@ def test_tenant_round_trip() -> None:
         name="Spicy Desi",
         twilio_number="+15555550100",
         owner_phone="+15555550199",
-        owner_available=OwnerAvailable(
-            tz="America/Chicago", weekly={"mon": ("11:00", "21:30")}
-        ),
+        owner_available=OwnerAvailable(tz="America/Chicago", weekly={"mon": ("11:00", "21:30")}),
         square_merchant_id="M1",
         languages=["en"],
         sms_confirmation_to_caller=True,

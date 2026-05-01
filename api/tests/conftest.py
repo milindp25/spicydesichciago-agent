@@ -17,7 +17,6 @@ from app.services.catalog_service import CatalogService
 from app.services.locations_service import LocationsService
 from tests.helpers.square_mock import FakeCatalogApi, FakeLocationsApi
 
-
 SHARED_SECRET = "s" * 32
 
 
@@ -27,9 +26,7 @@ def _build_tenant() -> Tenant:
         name="Spicy Desi",
         twilio_number="+15555550100",
         owner_phone="+15555550199",
-        owner_available=OwnerAvailable(
-            tz="America/Chicago", weekly={"mon": ("11:00", "21:30")}
-        ),
+        owner_available=OwnerAvailable(tz="America/Chicago", weekly={"mon": ("11:00", "21:30")}),
         square_merchant_id="M1",
         languages=["en"],
         sms_confirmation_to_caller=True,
@@ -62,9 +59,7 @@ def client_factory(
             tenants={tenant.slug: tenant},
             by_twilio_number={tenant.twilio_number: tenant.slug},
         )
-        loc_svc = LocationsService(
-            api=FakeLocationsApi(locations or []), cache=TtlCache(60)
-        )
+        loc_svc = LocationsService(api=FakeLocationsApi(locations or []), cache=TtlCache(60))
         cat_svc = CatalogService(
             api=FakeCatalogApi(catalog_items or []),
             cache=TtlCache(60),

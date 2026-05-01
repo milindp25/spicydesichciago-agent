@@ -3,7 +3,6 @@ from pydantic import ValidationError
 
 from app.infrastructure.config import AppSettings
 
-
 BASE_ENV = {
     "PORT": "8080",
     "LOG_LEVEL": "info",

@@ -17,9 +17,7 @@ class EventBody(BaseModel):
 
 
 @router.post("/calls/{call_sid}/event", status_code=202)
-async def append_call_event(
-    request: Request, call_sid: str, body: EventBody
-) -> dict[str, Any]:
+async def append_call_event(request: Request, call_sid: str, body: EventBody) -> dict[str, Any]:
     state = get_state(request)
     await state.event_log.append(
         EventRecord(call_sid=call_sid, kind=body.kind, payload=body.payload)

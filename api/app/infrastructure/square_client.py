@@ -21,11 +21,7 @@ class CatalogApi(Protocol):
 
 
 def make_square_client(*, access_token: str, environment: str) -> AsyncSquare:
-    env = (
-        SquareEnvironment.PRODUCTION
-        if environment == "production"
-        else SquareEnvironment.SANDBOX
-    )
+    env = SquareEnvironment.PRODUCTION if environment == "production" else SquareEnvironment.SANDBOX
     return AsyncSquare(token=access_token, environment=env)
 
 

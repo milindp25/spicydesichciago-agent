@@ -16,9 +16,7 @@ ITEMS: list[dict[str, Any]] = [
             "variations": [
                 {
                     "id": "V1",
-                    "item_variation_data": {
-                        "price_money": {"amount": 1899, "currency": "USD"}
-                    },
+                    "item_variation_data": {"price_money": {"amount": 1899, "currency": "USD"}},
                 }
             ],
         },
@@ -45,7 +43,5 @@ def test_requires_q(
     auth_headers: dict[str, str],
 ) -> None:
     c, _ = client_factory(catalog_items=ITEMS)
-    r = c.get(
-        "/api/locations/L1/menu/search?tenant=spicy-desi", headers=auth_headers
-    )
+    r = c.get("/api/locations/L1/menu/search?tenant=spicy-desi", headers=auth_headers)
     assert r.status_code == 400
