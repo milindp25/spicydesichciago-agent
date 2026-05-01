@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Protocol
 
 from square import AsyncSquare
 from square.environment import SquareEnvironment
+
+log = logging.getLogger(__name__)
 
 
 class LocationsApi(Protocol):
@@ -40,13 +43,18 @@ class SquareLocationsAdapter:
         self._client = client
 
     async def list_locations(self) -> list[dict[str, Any]]:
-        response = await self._client.locations.list()
+        try:
+            response = await self._client.locations.list()
+        except Exception:
+            log.exception("square locations.list failed")
+            raise
         return [_model_to_dict(loc) for loc in (response.locations or [])]
 
     async def retrieve_location(self, location_id: str) -> dict[str, Any] | None:
         try:
             response = await self._client.locations.get(location_id)
         except Exception:
+            log.exception("square locations.get failed", extra={"location_id": location_id})
             return None
         return _model_to_dict(response.location) if response.location else None
 
@@ -66,5 +74,9 @@ class SquareCatalogAdapter:
             kwargs["text_filter"] = text_filter
         if category_ids is not None:
             kwargs["category_ids"] = category_ids
-        response = await self._client.catalog.search_items(**kwargs)
+        try:
+            response = await self._client.catalog.search_items(**kwargs)
+        except Exception:
+            log.exception("square catalog.search_items failed", extra={"kwargs": kwargs})
+            raise
         return [_model_to_dict(item) for item in (response.items or [])]

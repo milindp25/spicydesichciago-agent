@@ -40,7 +40,7 @@ def _build() -> FastAPI:
     catalog_service = CatalogService(
         api=SquareCatalogAdapter(sq_client),
         cache=TtlCache(ttl_seconds=5 * 60),
-        specials_category_id="SPECIALS",
+        specials_category_id=settings.square_specials_category_id,
     )
     state = AppState(
         tools_shared_secret=settings.tools_shared_secret,
