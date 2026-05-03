@@ -2,7 +2,9 @@
 
 > **For agentic workers:** Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Stand up the actual phone agent. Customers call a Twilio number, Pipecat handles the voice loop (Silero VAD → Deepgram STT → Groq Llama 3.3 70B with tool calls → Cartesia TTS), tools call into the Plan 1 API for menu/pickup/etc., and the agent transfers to owner or takes a message when needed. Plus: wire the real Twilio SMS in `/api/messages` and the real Twilio REST live-call redirect in `/api/transfers` (currently stubs).
+**Goal:** Stand up the actual phone agent. Customers call a Twilio number, Pipecat handles the voice loop (Silero VAD → Deepgram STT (multilingual) → Groq Llama 3.3 70B with tool calls → Cartesia Sonic-2 multilingual TTS), tools call into the Plan 1 API for menu/pickup/etc., and the agent transfers to owner or takes a message when needed. Plus: wire the real Twilio SMS in `/api/messages` and the real Twilio REST live-call redirect in `/api/transfers` (currently stubs).
+
+**v1 language scope:** English + Hindi + Telugu. Detected automatically by Deepgram `language=multi`; agent responds in caller's language using Cartesia's multilingual voice. We test Telugu samples before launch — if quality is poor, we fall back to Hindi+English only.
 
 **End state:** A real phone call to a real Twilio number gets answered by the AI agent. Caller can ask "where are you today?", "what's on the menu?", "what are your specials?", "are you open?". They can ask for the owner — gets transferred when in-hours, take-message + SMS otherwise.
 
@@ -19,7 +21,7 @@ Caller → Twilio number
     Silero VAD
       → Deepgram Nova-3 STT (language=multi)
       → Groq Llama 3.3 70B (with tool calls)
-      → Cartesia Sonic-2 TTS
+      → Cartesia Sonic-2 multilingual TTS
       → back to Twilio
 
   Tool calls from LLM → HTTP → Plan 1 API (api/, with X-Tools-Auth):
@@ -41,7 +43,7 @@ Caller → Twilio number
 - Twilio (telephony + SMS REST + Media Streams)
 - Groq SDK (Llama 3.3 70B)
 - Deepgram SDK (STT)
-- Cartesia SDK (TTS)
+- Cartesia SDK (TTS — multilingual, ~$5/mo Hobby tier covers v1 dev + initial production)
 - ngrok (local dev — exposes localhost to Twilio for inbound webhooks)
 
 ---
@@ -53,7 +55,7 @@ External setup. Plan 2 depends on these.
 - [ ] **Twilio account** — create at twilio.com (free trial credit). Provision a phone number with **Voice + SMS** capabilities. Note: Account SID, Auth Token, phone number.
 - [ ] **Groq API key** — console.groq.com → create key. Free tier auto-applied.
 - [ ] **Deepgram API key** — console.deepgram.com → create key. Claim $200 free credit.
-- [ ] **Cartesia API key** — play.cartesia.ai → create key. Note a multilingual voice ID (try `Sonic-2 multilingual` voices and pick one whose Hindi sample sounds OK).
+- [ ] **Cartesia API key + multilingual voice** — play.cartesia.ai. Upgrade to Hobby tier ($5/mo) since the free tier credits are exhausted. Browse Sonic-2 multilingual voices, listen to BOTH a Hindi sample AND a Telugu sample for each candidate, and pick one that sounds clean in all three languages. Note the `voice_id`.
 - [ ] **ngrok** — `brew install ngrok` and `ngrok config add-authtoken …` (free tier is fine for dev).
 - [ ] **Twilio number webhook config — DO LATER** (Task 12) — once the local server is reachable via ngrok, configure the Twilio number's "A call comes in" webhook to `https://<ngrok-domain>/twilio/inbound`.
 
@@ -638,7 +640,7 @@ def test_cors_preflight_allowed_origin(client_factory) -> None:
 [project]
 name = "spicy-desi-agent"
 version = "0.1.0"
-description = "Spicy Desi voice agent (Pipecat + Twilio + Groq + Cartesia + Deepgram)"
+description = "Spicy Desi voice agent (Pipecat + Twilio + Groq + Deepgram + Cartesia)"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
@@ -863,7 +865,7 @@ You are a friendly, helpful AI phone assistant for Spicy Desi, a Chicago food tr
 Warm, brief, conversational. You are speaking — not writing. Use contractions. One sentence per turn when possible. Avoid bullet lists or markdown — speech only.
 
 # Language
-You start in English. If the caller speaks Hindi, switch to Hindi. If they speak another language you don't recognize confidently, ask politely if they speak English or Hindi.
+You speak English, Hindi, and Telugu. Greet in English. As soon as the caller's language is clear (after their first or second sentence), switch to that language and stay there for the rest of the call. If you can't tell, politely ask: "Would you prefer English, Hindi, or Telugu?" Don't mix languages mid-sentence.
 
 # What you can do
 You answer questions about:
@@ -1305,7 +1307,7 @@ You'll have THREE processes running:
 
 ## What's deferred to Plan 3
 
-- Telugu language support (test Cartesia quality, decide go/no-go)
+- (Telugu is in scope for Plan 2. If Cartesia samples are bad we revisit; otherwise nothing deferred here.)
 - Oracle Cloud deployment (systemd × 2, Caddy reverse proxy with both services + WS support, Let's Encrypt)
 - Real domain (replace ngrok with `voice-api.spicydesi.com` + `agent.spicydesi.com`)
 - Backups (R2 sync of `data/events.jsonl`)
@@ -1317,7 +1319,7 @@ You'll have THREE processes running:
 ## Open assumptions (correct me before we start)
 
 1. **Twilio account** — you'll provision a number for testing. Trial credit covers ~$15 of test calls.
-2. **Languages** — English + Hindi from day one; Telugu deferred to Plan 3 after we test Cartesia samples.
+2. **Languages** — English + Hindi + Telugu all from day one. Quality of Telugu in Cartesia gets validated in Task 5 (you preview voices). If Telugu audio is poor, we either pick a different voice, fall back to Hindi+English, or ship Telugu as a config-flagged opt-in.
 3. **CORS** — admin panel origin is unknown for now; CORS middleware lands in Plan 2 but `CORS_ORIGINS` env var is empty by default. Tell me the origin when you're ready and we'll set it.
 4. **Single Twilio number → spicy-desi tenant** — multi-tenant routing (look up tenant by inbound `To` number) is in the design but Plan 2 hardcodes `default_tenant=spicy-desi` for simplicity. Trivial to extend later.
-5. **Voice ID** — I'll suggest a Cartesia multilingual voice during Task 5; you'll listen to the sample and pick.
+5. **Voice ID** — Cartesia Hobby tier (~$5/mo) since the free credits are exhausted. During Task 5 you preview Sonic-2 multilingual voices, listen to Hindi + Telugu samples, pick the best, and put its `voice_id` in `agent/.env` as `CARTESIA_VOICE_ID`.
