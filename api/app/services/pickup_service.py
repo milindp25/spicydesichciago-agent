@@ -17,36 +17,36 @@ def _spot(name: str, address: str) -> str:
 def _build_summary(name: str, address: str, hours: HoursToday | None) -> str:
     spot = _spot(name, address)
     if hours is None:
-        return (
-            f"Today's pickup spot is {spot}, "
-            "but we don't have hours information for it right now."
-        )
+        return f"We're set up at {spot} today — not sure on hours though."
 
     tz = hours.tz_label
     if hours.is_open_now and hours.close_human:
-        return f"We're open today at {spot} until {hours.close_human} {tz}."
+        return f"We're open right now at {spot}, until {hours.close_human} {tz}."
 
     if hours.open_human and hours.close_human and hours.open is not None:
         if hours.next_open_weekday and hours.next_open_time_human:
             today_name = datetime.now(UTC).astimezone().strftime("%A")
             if hours.next_open_time == hours.open:
-                return f"We're closed right now. {spot} opens today at {hours.open_human} {tz}."
+                return (
+                    f"We're not open yet today — we'll be at {spot} "
+                    f"starting {hours.open_human} {tz}."
+                )
             _ = today_name
             return (
-                f"We're closed right now. Next open at {spot}: "
-                f"{hours.next_open_weekday} at {hours.next_open_time_human} {tz}."
+                f"We're done for today. Next we'll be at {spot} "
+                f"on {hours.next_open_weekday} at {hours.next_open_time_human} {tz}."
             )
         return (
-            f"We're closed right now. {spot} is open today from "
+            f"We're between hours right now — {spot} is open today from "
             f"{hours.open_human} to {hours.close_human} {tz}."
         )
 
     if hours.next_open_weekday and hours.next_open_time_human:
         return (
-            f"We're closed today. Next open at {spot}: "
+            f"We're closed today, but next we'll be at {spot} "
             f"{hours.next_open_weekday} at {hours.next_open_time_human} {tz}."
         )
-    return f"We're closed today at {spot}, and I don't have upcoming hours on file."
+    return f"We're at {spot} today but I don't have upcoming hours on file."
 
 
 class PickupService:
