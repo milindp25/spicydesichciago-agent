@@ -2,7 +2,9 @@
 
 > **For agentic workers:** Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Stand up the actual phone agent. Customers call a Twilio number, Pipecat handles the voice loop (Silero VAD → Deepgram STT → Groq Llama 3.3 70B with tool calls → Cartesia TTS), tools call into the Plan 1 API for menu/pickup/etc., and the agent transfers to owner or takes a message when needed. Plus: wire the real Twilio SMS in `/api/messages` and the real Twilio REST live-call redirect in `/api/transfers` (currently stubs).
+**Goal:** Stand up the actual phone agent. Customers call a Twilio number, Pipecat handles the voice loop (Silero VAD → Deepgram STT (multilingual) → Groq Llama 3.3 70B with tool calls → Cartesia Sonic-2 multilingual TTS), tools call into the Plan 1 API for menu/pickup/etc., and the agent transfers to owner or takes a message when needed. Plus: wire the real Twilio SMS in `/api/messages` and the real Twilio REST live-call redirect in `/api/transfers` (currently stubs).
+
+**v1 language scope:** English + Hindi + Telugu. Detected automatically by Deepgram `language=multi`; agent responds in caller's language using Cartesia's multilingual voice. We test Telugu samples before launch — if quality is poor, we fall back to Hindi+English only.
 
 **End state:** A real phone call to a real Twilio number gets answered by the AI agent. Caller can ask "where are you today?", "what's on the menu?", "what are your specials?", "are you open?". They can ask for the owner — gets transferred when in-hours, take-message + SMS otherwise.
 
@@ -19,7 +21,7 @@ Caller → Twilio number
     Silero VAD
       → Deepgram Nova-3 STT (language=multi)
       → Groq Llama 3.3 70B (with tool calls)
-      → Cartesia Sonic-2 TTS
+      → Cartesia Sonic-2 multilingual TTS
       → back to Twilio
 
   Tool calls from LLM → HTTP → Plan 1 API (api/, with X-Tools-Auth):
@@ -41,7 +43,7 @@ Caller → Twilio number
 - Twilio (telephony + SMS REST + Media Streams)
 - Groq SDK (Llama 3.3 70B)
 - Deepgram SDK (STT)
-- Cartesia SDK (TTS)
+- Cartesia SDK (TTS — multilingual, ~$5/mo Hobby tier covers v1 dev + initial production)
 - ngrok (local dev — exposes localhost to Twilio for inbound webhooks)
 
 ---
@@ -53,7 +55,7 @@ External setup. Plan 2 depends on these.
 - [ ] **Twilio account** — create at twilio.com (free trial credit). Provision a phone number with **Voice + SMS** capabilities. Note: Account SID, Auth Token, phone number.
 - [ ] **Groq API key** — console.groq.com → create key. Free tier auto-applied.
 - [ ] **Deepgram API key** — console.deepgram.com → create key. Claim $200 free credit.
-- [ ] **Cartesia API key** — play.cartesia.ai → create key. Note a multilingual voice ID (try `Sonic-2 multilingual` voices and pick one whose Hindi sample sounds OK).
+- [ ] **Cartesia API key + multilingual voice** — play.cartesia.ai. Upgrade to Hobby tier ($5/mo) since the free tier credits are exhausted. Browse Sonic-2 multilingual voices, listen to BOTH a Hindi sample AND a Telugu sample for each candidate, and pick one that sounds clean in all three languages. Note the `voice_id`.
 - [ ] **ngrok** — `brew install ngrok` and `ngrok config add-authtoken …` (free tier is fine for dev).
 - [ ] **Twilio number webhook config — DO LATER** (Task 12) — once the local server is reachable via ngrok, configure the Twilio number's "A call comes in" webhook to `https://<ngrok-domain>/twilio/inbound`.
 
@@ -406,6 +408,163 @@ Pass `agent_public_url` through `AppState`.
 
 ---
 
+## Task 3.5: SMS today's pickup address to caller (`POST /api/pickup/sms`)
+
+**Goal:** new agent-callable endpoint that texts the caller today's pickup spot — name + address + tap-to-open Google Maps link. Agent uses this when caller wants the location written down.
+
+**Files:**
+- Create: `api/app/api/routes/pickup_sms.py`
+- Modify: `api/app/api/app_factory.py` (mount router)
+- Modify: `api/app/services/pickup_service.py` — add `format_sms_body(pickup) -> str`
+- Modify: `api/app/domain/models.py` — add `SmsPickupRequest` model
+- Create: `api/tests/integration/test_pickup_sms_route.py`
+
+- [ ] **Step 1: Domain model**
+
+In `api/app/domain/models.py`:
+
+```python
+class SmsPickupRequest(BaseModel):
+    tenant: str
+    to_number: str
+    call_sid: str | None = None  # for event-log correlation
+```
+
+- [ ] **Step 2: Add SMS body formatter to `PickupService`**
+
+In `api/app/services/pickup_service.py`:
+
+```python
+from urllib.parse import quote_plus
+
+
+def build_pickup_sms_body(pickup: PickupToday) -> str:
+    address = pickup.address or "address coming soon"
+    maps_link = f"https://maps.google.com/?q={quote_plus(address)}"
+    if pickup.hours and pickup.hours.is_open_now and pickup.hours.close_human:
+        line2 = f"Open now until {pickup.hours.close_human} {pickup.hours.tz_label}."
+    elif pickup.hours and pickup.hours.next_open_weekday and pickup.hours.next_open_time_human:
+        line2 = (
+            f"Closed right now. Next open: {pickup.hours.next_open_weekday} at "
+            f"{pickup.hours.next_open_time_human} {pickup.hours.tz_label}."
+        )
+    else:
+        line2 = ""
+    parts = [f"Spicy Desi today: {pickup.name}", address, line2, maps_link]
+    return "\n".join(p for p in parts if p)
+```
+
+- [ ] **Step 3: Implement the route**
+
+`api/app/api/routes/pickup_sms.py`:
+
+```python
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from app.api.dependencies import get_state, require_tools_auth
+from app.domain.models import EventRecord, SmsPickupRequest
+from app.services.pickup_service import build_pickup_sms_body
+
+router = APIRouter(prefix="/api", dependencies=[Depends(require_tools_auth)])
+
+
+@router.post("/pickup/sms")
+async def sms_pickup(request: Request, body: SmsPickupRequest) -> dict[str, Any]:
+    state = get_state(request)
+    if body.tenant not in state.tenants.tenants:
+        raise HTTPException(404, "tenant not found")
+    pickup = await state.pickup_service.get_today(body.tenant)
+    if pickup is None:
+        raise HTTPException(409, "no pickup set for today")
+    sms_body = build_pickup_sms_body(pickup)
+    sent = await state.twilio.send_sms(to=body.to_number, body=sms_body)
+    await state.event_log.append(
+        EventRecord(
+            call_sid=body.call_sid or "n/a",
+            kind="pickup_sms_sent",
+            payload={
+                "to": body.to_number,
+                "location_id": pickup.location_id,
+                "sent": sent,
+            },
+        )
+    )
+    return {"ok": True, "sent": sent}
+```
+
+Mount in `app_factory.py`:
+
+```python
+from app.api.routes import ..., pickup_sms
+app.include_router(pickup_sms.router)
+```
+
+- [ ] **Step 4: Integration tests**
+
+`api/tests/integration/test_pickup_sms_route.py`:
+
+```python
+def test_sms_pickup_sends_when_set(client_factory, auth_headers) -> None:
+    SAMPLE = [{
+        "id": "L1", "name": "29th Street Near PS",
+        "address": {"address_line_1": "29th & Halsted"},
+        "business_hours": {"periods": []},
+        "timezone": "America/Chicago",
+    }]
+    c, state = client_factory(locations=SAMPLE)
+    # Set today's pickup first
+    c.post("/api/admin/pickup", headers=auth_headers,
+           json={"tenant": "spicy-desi", "location_id": "L1"})
+    # Now request SMS
+    r = c.post("/api/pickup/sms", headers=auth_headers,
+               json={"tenant": "spicy-desi", "to_number": "+13125550123"})
+    assert r.status_code == 200
+    assert r.json()["sent"] is True
+    assert len(state.twilio.sms_calls) == 1
+    msg = state.twilio.sms_calls[0]
+    assert msg["to"] == "+13125550123"
+    assert "29th Street Near PS" in msg["body"]
+    assert "29th & Halsted" in msg["body"]
+    assert "maps.google.com" in msg["body"]
+
+
+def test_sms_pickup_409_when_unset(client_factory, auth_headers) -> None:
+    c, _ = client_factory(locations=[])
+    r = c.post("/api/pickup/sms", headers=auth_headers,
+               json={"tenant": "spicy-desi", "to_number": "+13125550123"})
+    assert r.status_code == 409
+
+
+def test_sms_pickup_404_unknown_tenant(client_factory, auth_headers) -> None:
+    c, _ = client_factory(locations=[])
+    r = c.post("/api/pickup/sms", headers=auth_headers,
+               json={"tenant": "nope", "to_number": "+13125550123"})
+    assert r.status_code == 404
+
+
+def test_sms_pickup_requires_auth(client_factory) -> None:
+    c, _ = client_factory(locations=[])
+    r = c.post("/api/pickup/sms",
+               json={"tenant": "spicy-desi", "to_number": "+13125550123"})
+    assert r.status_code == 401
+```
+
+- [ ] **Step 5: Run + commit**
+
+```bash
+cd api && pytest tests/integration/test_pickup_sms_route.py -v
+git add api/app/domain/models.py api/app/services/pickup_service.py \
+        api/app/api/routes/pickup_sms.py api/app/api/app_factory.py \
+        api/tests/integration/test_pickup_sms_route.py
+git commit -m "feat(api): POST /api/pickup/sms — text caller today's pickup + maps link"
+```
+
+---
+
 ## Task 4: CORS middleware (for the admin panel)
 
 **Files:**
@@ -481,7 +640,7 @@ def test_cors_preflight_allowed_origin(client_factory) -> None:
 [project]
 name = "spicy-desi-agent"
 version = "0.1.0"
-description = "Spicy Desi voice agent (Pipecat + Twilio + Groq + Cartesia + Deepgram)"
+description = "Spicy Desi voice agent (Pipecat + Twilio + Groq + Deepgram + Cartesia)"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
@@ -654,6 +813,15 @@ class ApiClient:
             json={"kind": kind, "payload": payload},
         )
 
+    async def sms_pickup_address(
+        self, *, to_number: str, call_sid: str | None = None,
+    ) -> dict[str, Any]:
+        r = await self._client.post("/api/pickup/sms", json={
+            "tenant": self._tenant, "to_number": to_number, "call_sid": call_sid,
+        })
+        r.raise_for_status()
+        return r.json()
+
     async def aclose(self) -> None:
         await self._client.aclose()
 ```
@@ -697,7 +865,7 @@ You are a friendly, helpful AI phone assistant for Spicy Desi, a Chicago food tr
 Warm, brief, conversational. You are speaking — not writing. Use contractions. One sentence per turn when possible. Avoid bullet lists or markdown — speech only.
 
 # Language
-You start in English. If the caller speaks Hindi, switch to Hindi. If they speak another language you don't recognize confidently, ask politely if they speak English or Hindi.
+You speak English, Hindi, and Telugu. Greet in English. As soon as the caller's language is clear (after their first or second sentence), switch to that language and stay there for the rest of the call. If you can't tell, politely ask: "Would you prefer English, Hindi, or Telugu?" Don't mix languages mid-sentence.
 
 # What you can do
 You answer questions about:
@@ -706,6 +874,8 @@ You answer questions about:
 - Today's specials (call `get_specials`)
 - Hours of operation (the pickup_today response includes a speakable `summary` — read it verbatim)
 - Parking, allergens, payment methods, dress code, delivery, catering — answer from the knowledge below
+
+After telling someone where the truck is today, ALWAYS offer to text them the address: "Want me to text you the address with a maps link?" If yes, call `sms_pickup_address` with their phone number. Use the caller's number from the call metadata if you have it; otherwise ask them to confirm a number to text.
 
 # When to escalate
 Call `request_transfer` to send the caller to the owner when:
@@ -813,6 +983,23 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "sms_pickup_address",
+            "description": "Text the caller today's pickup address with a Google Maps link. Use after telling them the location verbally, when they confirm they want it texted.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to_number": {
+                        "type": "string",
+                        "description": "Caller's phone number in E.164 format (e.g., +13125551234)",
+                    },
+                },
+                "required": ["to_number"],
+            },
+        },
+    },
 ]
 ```
 
@@ -849,6 +1036,9 @@ async def handle_tool_call(
         return json.dumps(result)
     if name == "request_transfer":
         result = await api.request_transfer(call_sid=call_sid, reason=args.get("reason"))
+        return json.dumps(result)
+    if name == "sms_pickup_address":
+        result = await api.sms_pickup_address(to_number=args["to_number"], call_sid=call_sid)
         return json.dumps(result)
     return json.dumps({"error": f"unknown tool: {name}"})
 ```
@@ -1117,7 +1307,7 @@ You'll have THREE processes running:
 
 ## What's deferred to Plan 3
 
-- Telugu language support (test Cartesia quality, decide go/no-go)
+- (Telugu is in scope for Plan 2. If Cartesia samples are bad we revisit; otherwise nothing deferred here.)
 - Oracle Cloud deployment (systemd × 2, Caddy reverse proxy with both services + WS support, Let's Encrypt)
 - Real domain (replace ngrok with `voice-api.spicydesi.com` + `agent.spicydesi.com`)
 - Backups (R2 sync of `data/events.jsonl`)
@@ -1129,7 +1319,7 @@ You'll have THREE processes running:
 ## Open assumptions (correct me before we start)
 
 1. **Twilio account** — you'll provision a number for testing. Trial credit covers ~$15 of test calls.
-2. **Languages** — English + Hindi from day one; Telugu deferred to Plan 3 after we test Cartesia samples.
+2. **Languages** — English + Hindi + Telugu all from day one. Quality of Telugu in Cartesia gets validated in Task 5 (you preview voices). If Telugu audio is poor, we either pick a different voice, fall back to Hindi+English, or ship Telugu as a config-flagged opt-in.
 3. **CORS** — admin panel origin is unknown for now; CORS middleware lands in Plan 2 but `CORS_ORIGINS` env var is empty by default. Tell me the origin when you're ready and we'll set it.
 4. **Single Twilio number → spicy-desi tenant** — multi-tenant routing (look up tenant by inbound `To` number) is in the design but Plan 2 hardcodes `default_tenant=spicy-desi` for simplicity. Trivial to extend later.
-5. **Voice ID** — I'll suggest a Cartesia multilingual voice during Task 5; you'll listen to the sample and pick.
+5. **Voice ID** — Cartesia Hobby tier (~$5/mo) since the free credits are exhausted. During Task 5 you preview Sonic-2 multilingual voices, listen to Hindi + Telugu samples, pick the best, and put its `voice_id` in `agent/.env` as `CARTESIA_VOICE_ID`.

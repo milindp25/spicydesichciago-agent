@@ -97,6 +97,6 @@ All `/api/*` endpoints require `X-Tools-Auth: $TOOLS_SHARED_SECRET`. Tenant is s
 
 Tell the new session:
 
-> "Read `docs/superpowers/plans/2026-05-01-plan-2-pipecat-voice-agent.md` and start at Phase 0. Plan 1 is done and on `main` (60 tests passing). Confirmed assumptions: English + Hindi only for v1, single Twilio number → spicy-desi tenant."
+> "Read `docs/superpowers/plans/2026-05-01-plan-2-pipecat-voice-agent.md` and start at Phase 0. Plan 1 is done and on `main` (60 tests passing). Confirmed assumptions: English + Hindi + Telugu via Cartesia multilingual voice from day one, single Twilio number → spicy-desi tenant."
 
 The agent should pick it up from there. Phase 0 (account provisioning) is operator-only — it'll wait until you have Twilio + Groq + Deepgram + Cartesia keys ready.
