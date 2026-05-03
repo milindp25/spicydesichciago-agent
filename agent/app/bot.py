@@ -98,18 +98,32 @@ async def run_bot(
 
     async def _tool_handler(params: Any) -> None:
         """Pipecat passes a FunctionCallParams object; we dispatch to handle_tool_call."""
-        result_str = await handle_tool_call(
-            params.function_name,
-            dict(params.arguments),
-            api=api,
-            call_sid=call_sid,
-        )
         import json as _json
 
+        raw_args = params.arguments
+        if raw_args is None:
+            args: dict[str, Any] = {}
+        elif isinstance(raw_args, str):
+            try:
+                parsed = _json.loads(raw_args) if raw_args else {}
+            except Exception:
+                parsed = {}
+            args = parsed if isinstance(parsed, dict) else {}
+        else:
+            args = dict(raw_args)
+
         try:
-            payload = _json.loads(result_str)
-        except Exception:
-            payload = {"result": result_str}
+            result_str = await handle_tool_call(
+                params.function_name, args, api=api, call_sid=call_sid
+            )
+        except Exception as exc:
+            payload: dict[str, Any] = {"error": str(exc)}
+        else:
+            try:
+                payload = _json.loads(result_str)
+            except Exception:
+                payload = {"result": result_str}
+
         await params.result_callback(payload)
 
     # `None` registers the catch-all handler for every function call.
