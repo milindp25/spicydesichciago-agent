@@ -1,8 +1,8 @@
 {
   "slug": "spicy-desi",
   "name": "Spicy Desi",
-  "twilio_number": "+15555550100",
-  "owner_phone": "+15555550199",
+  "twilio_number": "${TWILIO_FROM_NUMBER}",
+  "owner_phone": "${OWNER_PHONE}",
   "owner_available": {
     "tz": "America/Chicago",
     "weekly": {
@@ -15,8 +15,10 @@
       "sun": ["12:00", "21:00"]
     }
   },
-  "square_merchant_id": "REPLACE_ME",
+  "square_merchant_id": "${SQUARE_MERCHANT_ID}",
   "languages": ["en", "hi", "te"],
   "sms_confirmation_to_caller": true,
-  "location_overrides": {}
+  "location_overrides": {},
+  "order_url": "${ORDER_URL}",
+  "owner_phone_is_temporary": true
 }

@@ -56,6 +56,28 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "send_order_link",
+            "description": (
+                "Text the caller a link to place an order online. Use this when the caller "
+                "wants to order food (we don't take phone orders). Sends to their caller ID."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_location_link",
+            "description": (
+                "Text the caller today's pickup address with a Google Maps link. Use this "
+                "when the caller asks 'where are you?' or wants directions. Sends to caller ID."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "take_message",
             "description": (
                 "Save a message for the owner to call back. Use when caller wants to "

@@ -104,6 +104,48 @@ async def test_request_transfer() -> None:
     assert json.loads(result)["action"] == "take_message"
 
 
+async def test_send_order_link_uses_caller_phone() -> None:
+    api = _routed({"/api/sms/send-link": {"ok": True, "kind": "order"}})
+    c = _client(api)
+    try:
+        result = await handle_tool_call(
+            "send_order_link", {}, api=c, call_sid="CA1", from_phone="+13125551111"
+        )
+    finally:
+        await c.aclose()
+    assert json.loads(result)["ok"] is True
+    body = json.loads(api.requests[0].content)
+    assert body["to"] == "+13125551111"
+    assert body["kind"] == "order"
+
+
+async def test_send_order_link_without_phone_returns_error() -> None:
+    api = _routed({})
+    c = _client(api)
+    try:
+        result = await handle_tool_call(
+            "send_order_link", {}, api=c, call_sid="CA1", from_phone=""
+        )
+    finally:
+        await c.aclose()
+    payload = json.loads(result)
+    assert "error" in payload
+    assert "no caller phone" in payload["error"]
+
+
+async def test_send_location_link_uses_caller_phone() -> None:
+    api = _routed({"/api/sms/send-link": {"ok": True, "kind": "location"}})
+    c = _client(api)
+    try:
+        await handle_tool_call(
+            "send_location_link", {}, api=c, call_sid="CA1", from_phone="+13125551111"
+        )
+    finally:
+        await c.aclose()
+    body = json.loads(api.requests[0].content)
+    assert body["kind"] == "location"
+
+
 async def test_unknown_tool_returns_error_payload() -> None:
     api = _routed({})
     c = _client(api)

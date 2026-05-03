@@ -55,3 +55,41 @@ def test_lookup_by_twilio_number(configs_dir: Path) -> None:
 def test_lookup_unknown_returns_none(configs_dir: Path) -> None:
     reg = load_tenants(str(configs_dir))
     assert lookup_tenant_by_twilio_number(reg, "+19999999999") is None
+
+
+def test_env_var_substitution_in_tenant_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OWNER_PHONE", "+13125550000")
+    monkeypatch.setenv("ORDER_URL", "https://example.com/order")
+    (tmp_path / "index.json").write_text(
+        json.dumps({"tenants_by_twilio_number": {"+15555550100": "spicy-desi"}})
+    )
+    sd = tmp_path / "spicy-desi"
+    sd.mkdir()
+    (sd / "tenant.json").write_text(
+        json.dumps(
+            {
+                "slug": "spicy-desi",
+                "name": "Spicy Desi",
+                "twilio_number": "+15555550100",
+                "owner_phone": "${OWNER_PHONE}",
+                "owner_available": {
+                    "tz": "America/Chicago",
+                    "weekly": {"mon": ["11:00", "21:30"]},
+                },
+                "square_merchant_id": "M1",
+                "languages": ["en"],
+                "sms_confirmation_to_caller": True,
+                "location_overrides": {},
+                "order_url": "${ORDER_URL}",
+            }
+        )
+    )
+    (sd / "faq.md").write_text("")
+    (sd / "location-notes.md").write_text("")
+
+    reg = load_tenants(str(tmp_path))
+    t = reg.tenants["spicy-desi"]
+    assert t.owner_phone == "+13125550000"
+    assert t.order_url == "https://example.com/order"

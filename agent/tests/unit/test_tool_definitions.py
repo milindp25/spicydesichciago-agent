@@ -7,6 +7,8 @@ EXPECTED_NAMES = {
     "search_menu",
     "list_full_menu",
     "get_specials",
+    "send_order_link",
+    "send_location_link",
     "take_message",
     "request_transfer",
 }

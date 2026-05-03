@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api.dependencies import AppState
 from app.api.routes import (
     address,
+    callers,
     events,
     health,
     hours,
@@ -15,6 +16,7 @@ from app.api.routes import (
     menu,
     messages,
     pickup,
+    sms,
     specials,
     transfers,
     webhooks_square,
@@ -48,5 +50,7 @@ def build_app(deps: AppState) -> FastAPI:
     app.include_router(transfers.router)
     app.include_router(events.router)
     app.include_router(pickup.router)
+    app.include_router(sms.router)
+    app.include_router(callers.router)
     app.include_router(webhooks_square.router)
     return app

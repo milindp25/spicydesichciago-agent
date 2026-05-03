@@ -106,3 +106,7 @@ class Tenant(BaseModel):
     faq: str
     location_notes: str
     specials: list[MenuItem] = Field(default_factory=list)
+    order_url: str = ""
+    # Marks owner_phone as a placeholder for testing — use to flag deploys
+    # where the owner's real number must be set before going live.
+    owner_phone_is_temporary: bool = False

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import FastAPI, Query, Request, WebSocket
+from fastapi import FastAPI, Form, Query, Request, WebSocket
 from fastapi.responses import PlainTextResponse
 
 from app.bot import run_bot
@@ -20,13 +20,23 @@ def build_app(settings: AgentSettings) -> FastAPI:
         return {"ok": True}
 
     @app.post("/twilio/inbound")
-    async def twilio_inbound(request: Request) -> PlainTextResponse:
+    async def twilio_inbound(
+        request: Request,
+        from_phone: str | None = Form(None, alias="From"),
+    ) -> PlainTextResponse:
         host = request.headers.get("host", "")
+        # Pass the caller's phone number through to the WebSocket via a
+        # Twilio Stream <Parameter>. The Pipecat side reads this from the
+        # `start` event's customParameters.
+        from_param = (from_phone or "").strip()
+        param_xml = f'    <Parameter name="from" value="{from_param}"/>\n' if from_param else ""
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             "<Response>\n"
             "  <Connect>\n"
-            f'    <Stream url="wss://{host}/twilio/stream"/>\n'
+            f'    <Stream url="wss://{host}/twilio/stream">\n'
+            f"{param_xml}"
+            "    </Stream>\n"
             "  </Connect>\n"
             "</Response>"
         )
@@ -60,11 +70,9 @@ def build_app(settings: AgentSettings) -> FastAPI:
     async def twilio_stream(ws: WebSocket) -> None:
         await ws.accept()
 
-        # Twilio sends a "connected" event followed by a "start" event with
-        # streamSid and callSid. We need both before constructing the
-        # TwilioFrameSerializer.
         stream_sid: str | None = None
         call_sid: str | None = None
+        from_phone: str = ""
         for _ in range(3):
             msg = await ws.receive_text()
             data = json.loads(msg)
@@ -72,6 +80,8 @@ def build_app(settings: AgentSettings) -> FastAPI:
                 start = data["start"]
                 stream_sid = start["streamSid"]
                 call_sid = start.get("callSid", "")
+                custom = start.get("customParameters") or {}
+                from_phone = (custom.get("from") or "").strip()
                 break
 
         if not stream_sid:
@@ -79,12 +89,16 @@ def build_app(settings: AgentSettings) -> FastAPI:
             await ws.close()
             return
 
-        log.info("twilio stream started", extra={"stream_sid": stream_sid, "call_sid": call_sid})
+        log.info(
+            "twilio stream started",
+            extra={"stream_sid": stream_sid, "call_sid": call_sid, "from": from_phone},
+        )
         await run_bot(
             ws,
             settings=settings,
             stream_sid=stream_sid,
             call_sid=call_sid or "",
+            from_phone=from_phone,
         )
 
     return app

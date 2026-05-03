@@ -72,6 +72,21 @@ class ApiClient:
         r.raise_for_status()
         return r.json()
 
+    async def send_sms_link(
+        self, *, call_sid: str, to: str, kind: str
+    ) -> dict[str, Any]:
+        r = await self._client.post(
+            "/api/sms/send-link",
+            json={"call_sid": call_sid, "to": to, "kind": kind},
+        )
+        r.raise_for_status()
+        return r.json()
+
+    async def get_caller_history(self, *, phone: str) -> dict[str, Any]:
+        r = await self._client.get("/api/callers/history", params={"phone": phone})
+        r.raise_for_status()
+        return r.json()
+
     async def append_event(self, *, call_sid: str, kind: str, payload: dict[str, Any]) -> None:
         await self._client.post(
             f"/api/calls/{call_sid}/event",

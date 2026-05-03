@@ -49,6 +49,8 @@ def _build_tenant() -> Tenant:
         location_overrides={},
         faq="",
         location_notes="",
+        order_url="https://order.spicydesi.com",
+        owner_phone_is_temporary=True,
     )
 
 
