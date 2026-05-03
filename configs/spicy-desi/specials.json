@@ -61,5 +61,19 @@
     "price": "$10.99",
     "category": "Indo-Chinese",
     "dietary_tags": ["vegetarian"]
+  },
+  {
+    "name": "Bhagara Rice",
+    "description": "Hyderabadi-style fragrant rice cooked with whole spices and herbs",
+    "price": "$9.99",
+    "category": "Rice & Curry",
+    "dietary_tags": ["vegetarian"]
+  },
+  {
+    "name": "Chicken Curry",
+    "description": "Bone-in chicken simmered in a spiced onion-tomato gravy",
+    "price": "$13.99",
+    "category": "Rice & Curry",
+    "dietary_tags": []
   }
 ]
