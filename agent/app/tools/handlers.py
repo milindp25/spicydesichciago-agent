@@ -19,7 +19,9 @@ async def handle_tool_call(
     if name == "search_menu":
         return json.dumps(await api.search_menu(args.get("query", "")))
     if name == "list_full_menu":
-        return json.dumps(await api.list_full_menu())
+        return json.dumps(await api.list_full_menu(category=args.get("category")))
+    if name == "list_menu_categories":
+        return json.dumps(await api.list_menu_categories())
     if name == "get_specials":
         return json.dumps(await api.get_specials())
     if name == "send_order_link":

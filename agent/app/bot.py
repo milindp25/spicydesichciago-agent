@@ -87,6 +87,7 @@ async def run_bot(
     from pipecat.services.cartesia.tts import CartesiaTTSService, CartesiaTTSSettings
     from pipecat.services.deepgram.stt import DeepgramSTTService, DeepgramSTTSettings
     from pipecat.services.groq.llm import GroqLLMService
+    from pipecat.services.openai.llm import OpenAILLMService
     from pipecat.transports.websocket.fastapi import (
         FastAPIWebsocketParams,
         FastAPIWebsocketTransport,
@@ -115,7 +116,22 @@ async def run_bot(
         api_key=settings.deepgram_api_key,
         settings=DeepgramSTTSettings(model="nova-3", language="en-US"),
     )
-    llm = GroqLLMService(api_key=settings.groq_api_key, model="llama-3.3-70b-versatile")
+    if settings.llm_base_url:
+        # OpenAI-compatible endpoint — Ollama, LM Studio, vLLM, OpenRouter, etc.
+        log.info(
+            "using OpenAI-compatible LLM",
+            extra={"base_url": settings.llm_base_url, "model": settings.llm_model},
+        )
+        llm = OpenAILLMService(
+            api_key=settings.llm_api_key or "not-needed",
+            base_url=settings.llm_base_url,
+            model=settings.llm_model,
+        )
+    else:
+        llm = GroqLLMService(
+            api_key=settings.groq_api_key,
+            model=settings.llm_model or "llama-3.3-70b-versatile",
+        )
     tts = CartesiaTTSService(
         api_key=settings.cartesia_api_key,
         settings=CartesiaTTSSettings(

@@ -6,6 +6,7 @@ EXPECTED_NAMES = {
     "get_pickup_today",
     "search_menu",
     "list_full_menu",
+    "list_menu_categories",
     "get_specials",
     "send_order_link",
     "send_location_link",

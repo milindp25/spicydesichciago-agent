@@ -32,8 +32,18 @@ class ApiClient:
         r.raise_for_status()
         return r.json()
 
-    async def list_full_menu(self) -> dict[str, Any]:
-        r = await self._client.get("/api/menu/list", params={"tenant": self._tenant})
+    async def list_full_menu(self, category: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"tenant": self._tenant}
+        if category:
+            params["category"] = category
+        r = await self._client.get("/api/menu/list", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    async def list_menu_categories(self) -> dict[str, Any]:
+        r = await self._client.get(
+            "/api/menu/categories", params={"tenant": self._tenant}
+        )
         r.raise_for_status()
         return r.json()
 

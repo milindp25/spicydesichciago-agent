@@ -34,15 +34,34 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "list_full_menu",
+            "name": "list_menu_categories",
             "description": (
-                "Return the entire menu (every item with name, price, and category). "
-                "Use this when the caller asks an open-ended or category-level question "
-                "like 'what kinds of chaat do you have?', 'what's on the menu?', or "
-                "'what do you serve?' — search_menu only matches by keyword and may "
-                "miss items in the same category."
+                "List the menu categories with how many items are in each. "
+                "Compact — use this FIRST for open questions like 'what's on the menu?' "
+                "so you can read off the categories instead of dumping every item."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_full_menu",
+            "description": (
+                "List menu items. Pass a category (e.g. 'Chaat', 'Mains', 'Drinks') "
+                "to get only that category — preferred. Without a category it returns "
+                "the entire menu, which is large; only do that as a last resort."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category filter, case-insensitive",
+                    },
+                },
+                "required": [],
+            },
         },
     },
     {
