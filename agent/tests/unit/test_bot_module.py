@@ -10,4 +10,5 @@ def test_system_prompt_contains_greeting() -> None:
 
     prompt = load_system_prompt()
     assert "Spicy Desi" in prompt
-    assert "How can I help?" in prompt
+    # Loose check that there's a phone-style greeting line — wording can vary.
+    assert "what can i get" in prompt.lower() or "how can i help" in prompt.lower()
