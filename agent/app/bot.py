@@ -69,8 +69,7 @@ async def run_bot(
     serializer = TwilioFrameSerializer(
         stream_sid=stream_sid,
         call_sid=call_sid,
-        account_sid=None,
-        auth_token=settings.twilio_auth_token or None,
+        params=TwilioFrameSerializer.InputParams(auto_hang_up=False),
     )
 
     transport = FastAPIWebsocketTransport(
