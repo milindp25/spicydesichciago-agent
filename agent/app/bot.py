@@ -49,6 +49,7 @@ async def run_bot(
 ) -> None:
     """Build and run the Pipecat voice-agent pipeline for a single call."""
     from pipecat.audio.vad.silero import SileroVADAnalyzer
+    from pipecat.audio.vad.vad_analyzer import VADParams
     from pipecat.frames.frames import LLMRunFrame
     from pipecat.pipeline.pipeline import Pipeline
     from pipecat.pipeline.runner import PipelineRunner
@@ -78,7 +79,11 @@ async def run_bot(
             audio_in_enabled=True,
             audio_out_enabled=True,
             add_wav_header=False,
-            vad_analyzer=SileroVADAnalyzer(),
+            # Tighter VAD silence window than the default (~0.8s) so the agent
+            # picks up turn-end faster on phone calls.
+            vad_analyzer=SileroVADAnalyzer(
+                params=VADParams(stop_secs=0.4, start_secs=0.2)
+            ),
             serializer=serializer,
         ),
     )
@@ -90,7 +95,9 @@ async def run_bot(
         api_key=settings.deepgram_api_key,
         settings=DeepgramSTTSettings(model="nova-3", language="en-US"),
     )
-    llm = GroqLLMService(api_key=settings.groq_api_key, model="openai/gpt-oss-120b")
+    # llama-3.3-70b is ~1.5-2x faster than gpt-oss-120b on Groq with similar
+    # tool-calling quality for this use case - big latency win.
+    llm = GroqLLMService(api_key=settings.groq_api_key, model="llama-3.3-70b-versatile")
     tts = CartesiaTTSService(
         api_key=settings.cartesia_api_key,
         settings=CartesiaTTSSettings(
