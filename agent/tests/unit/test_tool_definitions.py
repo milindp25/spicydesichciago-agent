@@ -5,6 +5,7 @@ from app.tools.definitions import TOOL_DEFINITIONS
 EXPECTED_NAMES = {
     "get_pickup_today",
     "search_menu",
+    "list_full_menu",
     "get_specials",
     "take_message",
     "request_transfer",

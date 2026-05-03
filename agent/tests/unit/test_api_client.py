@@ -39,6 +39,19 @@ async def test_search_menu_query_is_passed() -> None:
     assert dict(req.url.params) == {"tenant": "spicy-desi", "q": "momos"}
 
 
+async def test_list_full_menu_passes_tenant() -> None:
+    api = FakeApi(json_responder({"items": [{"name": "Pani Puri", "category": "Chaat"}]}))
+    c = _client(api)
+    try:
+        result = await c.list_full_menu()
+    finally:
+        await c.aclose()
+    assert result["items"][0]["name"] == "Pani Puri"
+    req = api.requests[0]
+    assert req.url.path == "/api/menu/list"
+    assert dict(req.url.params) == {"tenant": "spicy-desi"}
+
+
 async def test_get_specials() -> None:
     api = FakeApi(json_responder({"items": [{"name": "Pani Puri"}]}))
     c = _client(api)

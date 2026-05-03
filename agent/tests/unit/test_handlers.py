@@ -45,6 +45,26 @@ async def test_search_menu_uses_query_arg() -> None:
     assert "Momos" in result
 
 
+async def test_list_full_menu_returns_all_items() -> None:
+    api = _routed(
+        {
+            "/api/menu/list": {
+                "items": [
+                    {"name": "Pani Puri", "category": "Chaat"},
+                    {"name": "Masala Dosa", "category": "South Indian"},
+                ]
+            }
+        }
+    )
+    c = _client(api)
+    try:
+        result = await handle_tool_call("list_full_menu", {}, api=c, call_sid="CA1")
+    finally:
+        await c.aclose()
+    assert "Pani Puri" in result
+    assert "Masala Dosa" in result
+
+
 async def test_get_specials() -> None:
     api = _routed({"/api/specials": {"items": [{"name": "Pani Puri"}]}})
     c = _client(api)

@@ -13,6 +13,8 @@ async def handle_tool_call(
         return json.dumps(await api.get_pickup_today())
     if name == "search_menu":
         return json.dumps(await api.search_menu(args.get("query", "")))
+    if name == "list_full_menu":
+        return json.dumps(await api.list_full_menu())
     if name == "get_specials":
         return json.dumps(await api.get_specials())
     if name == "take_message":

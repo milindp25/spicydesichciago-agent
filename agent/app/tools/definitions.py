@@ -34,6 +34,20 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "list_full_menu",
+            "description": (
+                "Return the entire menu (every item with name, price, and category). "
+                "Use this when the caller asks an open-ended or category-level question "
+                "like 'what kinds of chaat do you have?', 'what's on the menu?', or "
+                "'what do you serve?' — search_menu only matches by keyword and may "
+                "miss items in the same category."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_specials",
             "description": "Get today's specials — items the food truck is featuring.",
             "parameters": {"type": "object", "properties": {}, "required": []},

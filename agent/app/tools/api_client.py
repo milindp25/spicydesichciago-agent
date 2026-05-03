@@ -32,6 +32,11 @@ class ApiClient:
         r.raise_for_status()
         return r.json()
 
+    async def list_full_menu(self) -> dict[str, Any]:
+        r = await self._client.get("/api/menu/list", params={"tenant": self._tenant})
+        r.raise_for_status()
+        return r.json()
+
     async def get_specials(self) -> dict[str, Any]:
         r = await self._client.get("/api/specials", params={"tenant": self._tenant})
         r.raise_for_status()
