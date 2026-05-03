@@ -69,6 +69,7 @@ def client_factory(
     def _build(
         locations: list[dict[str, Any]] | None = None,
         catalog_items: list[dict[str, Any]] | None = None,
+        catalog_categories: list[dict[str, Any]] | None = None,
         cors_origins: list[str] | None = None,
         agent_public_url: str = "https://agent.example.com",
     ) -> tuple[TestClient, AppState]:
@@ -79,7 +80,7 @@ def client_factory(
         )
         loc_svc = LocationsService(api=FakeLocationsApi(locations or []), cache=TtlCache(60))
         cat_svc = CatalogService(
-            api=FakeCatalogApi(catalog_items or []),
+            api=FakeCatalogApi(catalog_items or [], catalog_categories or []),
             cache=TtlCache(60),
             specials_category_id="SPECIALS",
         )

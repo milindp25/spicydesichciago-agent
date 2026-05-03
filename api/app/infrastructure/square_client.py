@@ -22,6 +22,8 @@ class CatalogApi(Protocol):
         category_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]: ...
 
+    async def list_categories(self) -> list[dict[str, Any]]: ...
+
 
 def make_square_client(*, access_token: str, environment: str) -> AsyncSquare:
     env = SquareEnvironment.PRODUCTION if environment == "production" else SquareEnvironment.SANDBOX
@@ -80,3 +82,16 @@ class SquareCatalogAdapter:
             log.exception("square catalog.search_items failed", extra={"kwargs": kwargs})
             raise
         return [_model_to_dict(item) for item in (response.items or [])]
+
+    async def list_categories(self) -> list[dict[str, Any]]:
+        try:
+            pager = await self._client.catalog.list(types="CATEGORY")
+        except Exception:
+            log.exception("square catalog.list(CATEGORY) failed")
+            raise
+        out: list[dict[str, Any]] = []
+        async for obj in pager:
+            d = _model_to_dict(obj)
+            if d.get("type") == "CATEGORY":
+                out.append(d)
+        return out

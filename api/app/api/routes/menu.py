@@ -20,3 +20,15 @@ async def search_menu(
         raise HTTPException(404, "tenant not found")
     items = await state.catalog_service.search_menu(q)
     return {"items": [i.model_dump() for i in items]}
+
+
+@router.get("/menu/list")
+async def list_menu(
+    request: Request,
+    tenant: str = Query(..., min_length=1),
+) -> dict[str, Any]:
+    state = get_state(request)
+    if tenant not in state.tenants.tenants:
+        raise HTTPException(404, "tenant not found")
+    items = await state.catalog_service.list_all_menu()
+    return {"items": [i.model_dump() for i in items]}

@@ -26,9 +26,7 @@ async def request_transfer(
     redirect_ok = False
     if decision.action == "transfer" and state.agent_public_url:
         twiml_url = f"{state.agent_public_url}/twilio/dial-owner?to={tenant.owner_phone}"
-        redirect_ok = await state.twilio.redirect_call(
-            call_sid=body.call_sid, twiml_url=twiml_url
-        )
+        redirect_ok = await state.twilio.redirect_call(call_sid=body.call_sid, twiml_url=twiml_url)
 
     await state.event_log.append(
         EventRecord(
