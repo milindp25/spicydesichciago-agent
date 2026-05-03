@@ -88,7 +88,7 @@ async def run_bot(
 
     stt = DeepgramSTTService(
         api_key=settings.deepgram_api_key,
-        settings=DeepgramSTTSettings(model="nova-3", language="multi"),
+        settings=DeepgramSTTSettings(model="nova-3", language="en-US"),
     )
     llm = GroqLLMService(api_key=settings.groq_api_key, model="openai/gpt-oss-120b")
     tts = CartesiaTTSService(
