@@ -83,11 +83,20 @@ async def run_bot(
         ),
     )
 
-    stt = DeepgramSTTService(api_key=settings.deepgram_api_key)
+    from pipecat.services.cartesia.tts import CartesiaTTSSettings
+    from pipecat.services.deepgram.stt import DeepgramSTTSettings
+
+    stt = DeepgramSTTService(
+        api_key=settings.deepgram_api_key,
+        settings=DeepgramSTTSettings(model="nova-3", language="multi"),
+    )
     llm = GroqLLMService(api_key=settings.groq_api_key, model="openai/gpt-oss-120b")
     tts = CartesiaTTSService(
         api_key=settings.cartesia_api_key,
-        voice_id=settings.cartesia_voice_id,
+        settings=CartesiaTTSSettings(
+            voice=settings.cartesia_voice_id,
+            model="sonic-2",
+        ),
     )
 
     api = ApiClient(
