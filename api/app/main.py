@@ -20,6 +20,11 @@ from app.infrastructure.square_client import (  # noqa: E402
     make_square_client,
 )
 from app.infrastructure.tenant_registry import load_tenants  # noqa: E402
+from app.infrastructure.twilio_client import (  # noqa: E402
+    NoopTwilioClient,
+    RealTwilioClient,
+    TwilioOps,
+)
 from app.services.catalog_service import CatalogService  # noqa: E402
 from app.services.locations_service import LocationsService  # noqa: E402
 from app.services.pickup_service import PickupService  # noqa: E402
@@ -46,6 +51,15 @@ def _build() -> FastAPI:
     )
     pickup_store = PickupStateStore("./data/pickup-state.json")
     pickup_service = PickupService(store=pickup_store, locations=locations_service)
+    twilio: TwilioOps = (
+        RealTwilioClient(
+            account_sid=settings.twilio_account_sid,
+            auth_token=settings.twilio_auth_token,
+            from_number=settings.twilio_from_number,
+        )
+        if settings.twilio_account_sid
+        else NoopTwilioClient()
+    )
     state = AppState(
         tools_shared_secret=settings.tools_shared_secret,
         tenants=load_tenants(settings.configs_dir),
@@ -55,6 +69,9 @@ def _build() -> FastAPI:
         event_log=JsonlEventLog(settings.event_log_path),
         square_webhook_signature_key=settings.square_webhook_signature_key,
         square_webhook_url=settings.square_webhook_url,
+        twilio=twilio,
+        agent_public_url=settings.agent_public_url,
+        cors_origins=settings.cors_origin_list,
     )
     return build_app(state)
 

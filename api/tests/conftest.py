@@ -22,6 +22,20 @@ from tests.helpers.square_mock import FakeCatalogApi, FakeLocationsApi
 SHARED_SECRET = "s" * 32
 
 
+class FakeTwilioClient:
+    def __init__(self) -> None:
+        self.sms_calls: list[dict[str, str]] = []
+        self.redirects: list[dict[str, str]] = []
+
+    async def send_sms(self, *, to: str, body: str) -> bool:
+        self.sms_calls.append({"to": to, "body": body})
+        return True
+
+    async def redirect_call(self, *, call_sid: str, twiml_url: str) -> bool:
+        self.redirects.append({"call_sid": call_sid, "twiml_url": twiml_url})
+        return True
+
+
 def _build_tenant() -> Tenant:
     return Tenant(
         slug="spicy-desi",
@@ -55,6 +69,8 @@ def client_factory(
     def _build(
         locations: list[dict[str, Any]] | None = None,
         catalog_items: list[dict[str, Any]] | None = None,
+        cors_origins: list[str] | None = None,
+        agent_public_url: str = "https://agent.example.com",
     ) -> tuple[TestClient, AppState]:
         tenant = _build_tenant()
         registry = TenantRegistry(
@@ -70,6 +86,7 @@ def client_factory(
         log = JsonlEventLog(str(tmp_path / "events.jsonl"))
         pickup_store = PickupStateStore(str(tmp_path / "pickup-state.json"))
         pickup_svc = PickupService(store=pickup_store, locations=loc_svc)
+        twilio = FakeTwilioClient()
         state = AppState(
             tools_shared_secret=SHARED_SECRET,
             tenants=registry,
@@ -79,6 +96,9 @@ def client_factory(
             event_log=log,
             square_webhook_signature_key="key",
             square_webhook_url="https://example.com/api/webhooks/square",
+            twilio=twilio,
+            agent_public_url=agent_public_url,
+            cors_origins=cors_origins or [],
         )
         return TestClient(build_app(state)), state
 
