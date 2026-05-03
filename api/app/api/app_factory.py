@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies import AppState
@@ -23,6 +24,15 @@ from app.api.routes import (
 def build_app(deps: AppState) -> FastAPI:
     app = FastAPI(title="Spicy Desi API")
     app.state.deps = deps
+
+    if deps.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=deps.cors_origins,
+            allow_methods=["GET", "POST"],
+            allow_headers=["X-Tools-Auth", "Content-Type"],
+            allow_credentials=False,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def _on_validation_error(_: object, exc: RequestValidationError) -> JSONResponse:
