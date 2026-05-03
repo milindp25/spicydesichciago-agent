@@ -56,7 +56,6 @@ def load_tenants(configs_dir: str) -> TenantRegistry:
             twilio_number=tj["twilio_number"],
             owner_phone=tj["owner_phone"],
             owner_available=OwnerAvailable(tz=tj["owner_available"]["tz"], weekly=weekly),
-            square_merchant_id=tj["square_merchant_id"],
             languages=tj["languages"],
             sms_confirmation_to_caller=tj["sms_confirmation_to_caller"],
             location_overrides=tj.get("location_overrides", {}),

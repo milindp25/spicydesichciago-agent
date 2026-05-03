@@ -15,7 +15,6 @@
       "sun": ["12:00", "21:00"]
     }
   },
-  "square_merchant_id": "${SQUARE_MERCHANT_ID}",
   "languages": ["en", "hi", "te"],
   "sms_confirmation_to_caller": true,
   "location_overrides": {},

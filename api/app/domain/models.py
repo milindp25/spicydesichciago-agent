@@ -99,7 +99,6 @@ class Tenant(BaseModel):
     twilio_number: str
     owner_phone: str
     owner_available: OwnerAvailable
-    square_merchant_id: str
     languages: list[str]
     sms_confirmation_to_caller: bool
     location_overrides: dict[str, dict[str, Any]]
