@@ -35,7 +35,7 @@ def test_twilio_inbound_returns_twiml_with_stream_url(client: TestClient) -> Non
 
 
 def test_dial_owner_returns_twiml_dial(client: TestClient) -> None:
-    r = client.post("/twilio/dial-owner", data={"to": "+15555550199"})
+    r = client.post("/twilio/dial-owner?to=%2B15555550199")
     assert r.status_code == 200
     body = r.text
     assert "<Dial " in body

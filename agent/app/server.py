@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Form, Request, WebSocket
+import json
+import logging
+
+from fastapi import FastAPI, Query, Request, WebSocket
 from fastapi.responses import PlainTextResponse
 
 from app.bot import run_bot
 from app.config import AgentSettings
+
+log = logging.getLogger(__name__)
 
 
 def build_app(settings: AgentSettings) -> FastAPI:
@@ -28,7 +33,7 @@ def build_app(settings: AgentSettings) -> FastAPI:
         return PlainTextResponse(twiml, media_type="application/xml")
 
     @app.post("/twilio/dial-owner")
-    async def dial_owner(to: str = Form(...)) -> PlainTextResponse:
+    async def dial_owner(to: str = Query(...)) -> PlainTextResponse:
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             "<Response>\n"
@@ -54,10 +59,32 @@ def build_app(settings: AgentSettings) -> FastAPI:
     @app.websocket("/twilio/stream")
     async def twilio_stream(ws: WebSocket) -> None:
         await ws.accept()
-        # Twilio sends a "start" event with call_sid in the first WS message.
-        # The Pipecat Twilio serializer parses this; we pass through to run_bot
-        # which delegates frame handling to the transport.
-        call_sid = "PENDING"
-        await run_bot(ws, settings=settings, call_sid=call_sid)
+
+        # Twilio sends a "connected" event followed by a "start" event with
+        # streamSid and callSid. We need both before constructing the
+        # TwilioFrameSerializer.
+        stream_sid: str | None = None
+        call_sid: str | None = None
+        for _ in range(3):
+            msg = await ws.receive_text()
+            data = json.loads(msg)
+            if data.get("event") == "start":
+                start = data["start"]
+                stream_sid = start["streamSid"]
+                call_sid = start.get("callSid", "")
+                break
+
+        if not stream_sid:
+            log.warning("twilio stream did not deliver a start event; closing")
+            await ws.close()
+            return
+
+        log.info("twilio stream started", extra={"stream_sid": stream_sid, "call_sid": call_sid})
+        await run_bot(
+            ws,
+            settings=settings,
+            stream_sid=stream_sid,
+            call_sid=call_sid or "",
+        )
 
     return app
