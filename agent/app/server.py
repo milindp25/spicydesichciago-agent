@@ -53,12 +53,37 @@ def build_app(settings: AgentSettings) -> FastAPI:
         return PlainTextResponse(twiml, media_type="application/xml")
 
     @app.post("/twilio/dial-owner-fallback")
-    async def dial_owner_fallback(request: Request) -> PlainTextResponse:
+    async def dial_owner_fallback(
+        request: Request,
+        DialCallStatus: str | None = Form(None),  # noqa: N803
+    ) -> PlainTextResponse:
         host = request.headers.get("host", "")
+        status = (DialCallStatus or "").lower()
+        log.info("dial-owner-fallback fired", extra={"DialCallStatus": status})
+
+        # Caller and owner finished a normal conversation -> just hang up.
+        if status == "completed":
+            twiml = (
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                "<Response><Hangup/></Response>"
+            )
+            return PlainTextResponse(twiml, media_type="application/xml")
+
+        # Phrasing depends on why the dial failed.
+        if status in ("failed", "canceled"):
+            say = (
+                "Hmm, looks like that number's not reachable. "
+                "Let me grab a message for the owner instead."
+            )
+        elif status == "busy":
+            say = "Owner's on another call. Let me take a message and they'll ring you back."
+        else:  # no-answer or anything else
+            say = "Owner didn't pick up. Let me take a message and they'll ring you back."
+
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             "<Response>\n"
-            "  <Say>The owner couldn't pick up. Let me take a message instead.</Say>\n"
+            f"  <Say>{say}</Say>\n"
             "  <Connect>\n"
             f'    <Stream url="wss://{host}/twilio/stream"/>\n'
             "  </Connect>\n"
