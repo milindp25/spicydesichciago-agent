@@ -30,3 +30,16 @@ class AppSettings(BaseSettings):
 
     configs_dir: str = Field(..., alias="CONFIGS_DIR", min_length=1)
     event_log_path: str = Field("./data/events.jsonl", alias="EVENT_LOG_PATH")
+
+    twilio_account_sid: str = Field("", alias="TWILIO_ACCOUNT_SID")
+    twilio_auth_token: str = Field("", alias="TWILIO_AUTH_TOKEN")
+    twilio_from_number: str = Field("", alias="TWILIO_FROM_NUMBER")
+    twilio_signing_secret: str = Field("", alias="TWILIO_SIGNING_SECRET")
+
+    agent_public_url: str = Field("", alias="AGENT_PUBLIC_URL")
+
+    cors_origins: str = Field("", alias="CORS_ORIGINS")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

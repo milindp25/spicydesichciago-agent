@@ -1,10 +1,31 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from app.domain.models import MenuItem, OwnerAvailable, Tenant
+
+_ENV_REF = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
+
+
+def _expand_env(value: Any) -> Any:
+    """Substitute ${ENV_VAR} references inside string values, recursively.
+
+    Lets tenant config files reference env vars for anything per-deploy
+    or sensitive (phone numbers, URLs, merchant IDs) without committing them.
+    Missing env vars resolve to an empty string.
+    """
+    if isinstance(value, str):
+        return _ENV_REF.sub(lambda m: os.environ.get(m.group(1), ""), value)
+    if isinstance(value, dict):
+        return {k: _expand_env(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_expand_env(v) for v in value]
+    return value
 
 
 @dataclass(frozen=True)
@@ -20,7 +41,7 @@ def load_tenants(configs_dir: str) -> TenantRegistry:
     for entry in base.iterdir():
         if not entry.is_dir():
             continue
-        tj = json.loads((entry / "tenant.json").read_text())
+        tj = _expand_env(json.loads((entry / "tenant.json").read_text()))
         weekly_raw = tj["owner_available"]["weekly"]
         weekly: dict[str, tuple[str, str]] = {
             day: (window[0], window[1]) for day, window in weekly_raw.items()
@@ -35,13 +56,14 @@ def load_tenants(configs_dir: str) -> TenantRegistry:
             twilio_number=tj["twilio_number"],
             owner_phone=tj["owner_phone"],
             owner_available=OwnerAvailable(tz=tj["owner_available"]["tz"], weekly=weekly),
-            square_merchant_id=tj["square_merchant_id"],
             languages=tj["languages"],
             sms_confirmation_to_caller=tj["sms_confirmation_to_caller"],
             location_overrides=tj.get("location_overrides", {}),
             faq=(entry / "faq.md").read_text(),
             location_notes=(entry / "location-notes.md").read_text(),
             specials=specials,
+            order_url=tj.get("order_url", ""),
+            owner_phone_is_temporary=tj.get("owner_phone_is_temporary", False),
         )
     return TenantRegistry(tenants=tenants, by_twilio_number=index["tenants_by_twilio_number"])
 

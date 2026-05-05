@@ -99,10 +99,13 @@ class Tenant(BaseModel):
     twilio_number: str
     owner_phone: str
     owner_available: OwnerAvailable
-    square_merchant_id: str
     languages: list[str]
     sms_confirmation_to_caller: bool
     location_overrides: dict[str, dict[str, Any]]
     faq: str
     location_notes: str
     specials: list[MenuItem] = Field(default_factory=list)
+    order_url: str = ""
+    # Marks owner_phone as a placeholder for testing — use to flag deploys
+    # where the owner's real number must be set before going live.
+    owner_phone_is_temporary: bool = False

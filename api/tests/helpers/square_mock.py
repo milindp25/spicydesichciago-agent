@@ -18,8 +18,13 @@ class FakeLocationsApi:
 
 
 class FakeCatalogApi:
-    def __init__(self, items: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        items: list[dict[str, Any]],
+        categories: list[dict[str, Any]] | None = None,
+    ) -> None:
         self._items = items
+        self._categories = categories or []
 
     async def search_items(
         self,
@@ -39,3 +44,6 @@ class FakeCatalogApi:
                 if any(c["id"] in ids for c in i["item_data"].get("categories", []))
             ]
         return result
+
+    async def list_categories(self) -> list[dict[str, Any]]:
+        return list(self._categories)

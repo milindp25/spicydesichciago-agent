@@ -24,3 +24,10 @@ class JsonlEventLog:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             with self._path.open("a", encoding="utf-8") as f:
                 f.write(line)
+
+    async def read_all(self) -> list[dict]:
+        async with self._lock:
+            if not self._path.exists():
+                return []
+            with self._path.open("r", encoding="utf-8") as f:
+                return [json.loads(line) for line in f if line.strip()]

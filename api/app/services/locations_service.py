@@ -12,10 +12,18 @@ from app.infrastructure.square_client import LocationsApi
 def _format_address(addr: dict[str, Any] | None) -> str:
     if not addr:
         return ""
+    # Square's REST API uses `address_line_1` / `administrative_district_level_1`,
+    # but the Python SDK's pydantic model deserialises them without the
+    # underscore (`address_line1`, `administrative_district_level1`). Accept both
+    # so we work with raw dicts and SDK-converted dicts.
+    line1 = addr.get("address_line1") or addr.get("address_line_1")
+    state = addr.get("administrative_district_level1") or addr.get(
+        "administrative_district_level_1"
+    )
     parts = [
-        addr.get("address_line_1"),
+        line1,
         addr.get("locality"),
-        addr.get("administrative_district_level_1"),
+        state,
         addr.get("postal_code"),
     ]
     return ", ".join(p for p in parts if p)

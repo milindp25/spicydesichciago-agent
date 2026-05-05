@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import hmac
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import Header, HTTPException, Request, status
 
 from app.infrastructure.event_log import JsonlEventLog
 from app.infrastructure.tenant_registry import TenantRegistry
+from app.infrastructure.twilio_client import TwilioOps
 from app.services.catalog_service import CatalogService
 from app.services.locations_service import LocationsService
 from app.services.pickup_service import PickupService
@@ -22,6 +23,9 @@ class AppState:
     event_log: JsonlEventLog
     square_webhook_signature_key: str
     square_webhook_url: str
+    twilio: TwilioOps
+    agent_public_url: str = ""
+    cors_origins: list[str] = field(default_factory=list)
 
 
 def get_state(request: Request) -> AppState:

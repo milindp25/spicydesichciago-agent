@@ -79,7 +79,10 @@ def test_set_pickup_then_read(
     assert pickup["name"] == "29th Street Near PS"
     assert pickup["hours"]["is_open_now"] is True
     assert pickup["hours"]["close_human"] == "9:30 PM"
-    assert "open today at 29th Street Near PS until 9:30 PM Central" in pickup["summary"]
+    summary = pickup["summary"]
+    assert "29th Street Near PS" in summary
+    assert "29th & Halsted" in summary  # full address read out
+    assert "9:30 PM Central" in summary
 
 
 def test_pickup_summary_when_closed_now_but_opens_later_today(
@@ -96,7 +99,9 @@ def test_pickup_summary_when_closed_now_but_opens_later_today(
     )
     pickup = r.json()["pickup"]
     assert pickup["hours"]["is_open_now"] is False
-    assert "opens today at 11:00 AM Central" in pickup["summary"]
+    summary = pickup["summary"]
+    assert "11:00 AM Central" in summary
+    assert "29th Street Near PS" in summary
 
 
 def test_pickup_summary_when_closed_today_with_next_open(

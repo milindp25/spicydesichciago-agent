@@ -7,43 +7,46 @@ from app.infrastructure.pickup_state import PickupRecord, PickupStateStore
 from app.services.locations_service import LocationsService
 
 
-def _build_summary(name: str, hours: HoursToday | None) -> str:
+def _spot(name: str, address: str) -> str:
+    address = (address or "").strip()
+    if address:
+        return f"{name}, at {address}"
+    return name
+
+
+def _build_summary(name: str, address: str, hours: HoursToday | None) -> str:
+    spot = _spot(name, address)
     if hours is None:
-        return (
-            f"Today's pickup spot is {name}, but we don't have hours information for it right now."
-        )
+        return f"We're set up at {spot} today — not sure on hours though."
 
     tz = hours.tz_label
     if hours.is_open_now and hours.close_human:
-        return f"We're open today at {name} until {hours.close_human} {tz}."
+        return f"We're open right now at {spot}, until {hours.close_human} {tz}."
 
-    # Not open right now.
     if hours.open_human and hours.close_human and hours.open is not None:
-        # Today has hours but we're outside them. Two cases: before opening, or after closing.
-        # If next_open is today (same day), say so explicitly.
         if hours.next_open_weekday and hours.next_open_time_human:
-            today_name = (
-                datetime.now(UTC).astimezone().strftime("%A")
-            )  # rough; replaced by a precise check via next_open vs today's open below
+            today_name = datetime.now(UTC).astimezone().strftime("%A")
             if hours.next_open_time == hours.open:
-                return f"We're closed right now. {name} opens today at {hours.open_human} {tz}."
+                return (
+                    f"We're not open yet today — we'll be at {spot} "
+                    f"starting {hours.open_human} {tz}."
+                )
             _ = today_name
             return (
-                f"We're closed right now. Next open at {name}: "
-                f"{hours.next_open_weekday} at {hours.next_open_time_human} {tz}."
+                f"We're done for today. Next we'll be at {spot} "
+                f"on {hours.next_open_weekday} at {hours.next_open_time_human} {tz}."
             )
         return (
-            f"We're closed right now. {name} is open today from "
+            f"We're between hours right now — {spot} is open today from "
             f"{hours.open_human} to {hours.close_human} {tz}."
         )
 
-    # No hours today at all.
     if hours.next_open_weekday and hours.next_open_time_human:
         return (
-            f"We're closed today. Next open at {name}: "
+            f"We're closed today, but next we'll be at {spot} "
             f"{hours.next_open_weekday} at {hours.next_open_time_human} {tz}."
         )
-    return f"We're closed today at {name}, and I don't have upcoming hours on file."
+    return f"We're at {spot} today but I don't have upcoming hours on file."
 
 
 class PickupService:
@@ -75,7 +78,7 @@ class PickupService:
             set_at=record.set_at,
             set_for_date=record.set_for_date,
             hours=hours,
-            summary=_build_summary(match.name, hours),
+            summary=_build_summary(match.name, match.address, hours),
         )
 
     async def set_today(self, tenant_slug: str, location_id: str) -> PickupRecord:

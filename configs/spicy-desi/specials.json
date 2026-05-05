@@ -1,5 +1,12 @@
 [
   {
+    "name": "Samosa Chaat",
+    "description": "Crushed samosa topped with chickpeas, yogurt, chutneys, and onions",
+    "price": "$7.99",
+    "category": "Chaat",
+    "dietary_tags": ["vegetarian"]
+  },
+  {
     "name": "Pani Puri",
     "description": "Crispy semolina shells filled with spiced potato, chickpeas, and tangy tamarind water",
     "price": "$8.99",
@@ -9,29 +16,64 @@
   {
     "name": "Veg Momos",
     "description": "Steamed dumplings filled with cabbage, carrots, and herbs, served with spicy chutney",
-    "price": "$9.99",
+    "price": "$10.99",
     "category": "Momos",
     "dietary_tags": ["vegetarian"]
   },
   {
-    "name": "Hakka Noodles",
+    "name": "Chicken Momos",
+    "description": "Steamed dumplings filled with seasoned chicken, served with spicy chutney",
+    "price": "$11.99",
+    "category": "Momos",
+    "dietary_tags": []
+  },
+  {
+    "name": "Kaati Roll",
+    "description": "Street-style flaky paratha wrapped around marinated meat or veg, with onions and chutney",
+    "price": "$9.99",
+    "category": "Rolls",
+    "dietary_tags": []
+  },
+  {
+    "name": "Veg Hakka Noodles",
     "description": "Indo-Chinese stir-fried noodles with vegetables and house sauce",
+    "price": "$10.99",
+    "category": "Indo-Chinese",
+    "dietary_tags": ["vegetarian"]
+  },
+  {
+    "name": "Chicken Hakka Noodles",
+    "description": "Indo-Chinese stir-fried noodles with chicken and house sauce",
+    "price": "$12.99",
+    "category": "Indo-Chinese",
+    "dietary_tags": []
+  },
+  {
+    "name": "Paneer Chilli",
+    "description": "Crispy paneer tossed in a spicy Indo-Chinese chilli sauce with peppers and onions",
     "price": "$11.99",
     "category": "Indo-Chinese",
     "dietary_tags": ["vegetarian"]
   },
   {
-    "name": "Masala Dosa",
-    "description": "Crispy rice and lentil crepe filled with spiced potato, served with sambar and chutneys",
+    "name": "Veg Chilli",
+    "description": "Mixed vegetables tossed in a spicy Indo-Chinese chilli sauce",
     "price": "$10.99",
-    "category": "South Indian",
-    "dietary_tags": ["vegetarian", "gluten-free"]
+    "category": "Indo-Chinese",
+    "dietary_tags": ["vegetarian"]
   },
   {
-    "name": "Mango Lassi",
-    "description": "Sweet yogurt drink blended with ripe mango",
-    "price": "$4.99",
-    "category": "Drinks",
-    "dietary_tags": ["vegetarian", "gluten-free"]
+    "name": "Bhagara Rice",
+    "description": "Hyderabadi-style fragrant rice cooked with whole spices and herbs",
+    "price": "$9.99",
+    "category": "Rice & Curry",
+    "dietary_tags": ["vegetarian"]
+  },
+  {
+    "name": "Chicken Curry",
+    "description": "Bone-in chicken simmered in a spiced onion-tomato gravy",
+    "price": "$13.99",
+    "category": "Rice & Curry",
+    "dietary_tags": []
   }
 ]
