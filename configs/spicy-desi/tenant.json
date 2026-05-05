@@ -5,19 +5,12 @@
   "owner_phone": "${OWNER_PHONE}",
   "owner_available": {
     "tz": "America/Chicago",
-    "weekly": {
-      "mon": ["11:00", "21:30"],
-      "tue": ["11:00", "21:30"],
-      "wed": ["11:00", "21:30"],
-      "thu": ["11:00", "21:30"],
-      "fri": ["11:00", "22:30"],
-      "sat": ["11:00", "22:30"],
-      "sun": ["12:00", "21:00"]
-    }
+    "default_window": ["08:00", "22:00"]
   },
   "languages": ["en", "hi", "te"],
   "sms_confirmation_to_caller": true,
   "location_overrides": {},
   "order_url": "${ORDER_URL}",
+  "greeting": "Hey, Spicy Desi — heads up, this call may be recorded for quality. What can I get for ya?",
   "owner_phone_is_temporary": true
 }

@@ -34,6 +34,37 @@ class TenantRegistry:
     by_twilio_number: dict[str, str]
 
 
+_ALL_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def _expand_weekly(owner_available: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    """Build the per-day window map from `default_window` + optional `weekly` overrides.
+
+    Tenant config can specify either:
+      - `default_window: ["08:00", "22:00"]` — applied to every day, or
+      - `weekly: {"mon": ["11:00", "21:30"], ...}` — explicit per-day, or
+      - both — `default_window` fills, `weekly` overrides specific days.
+    Setting a day to `null` in `weekly` removes that day from the window
+    (owner unavailable that day).
+    """
+    weekly: dict[str, tuple[str, str]] = {}
+    default = owner_available.get("default_window")
+    if default:
+        for day in _ALL_DAYS:
+            weekly[day] = (default[0], default[1])
+
+    overrides = owner_available.get("weekly") or {}
+    for day, window in overrides.items():
+        if window is None:
+            weekly.pop(day, None)
+        else:
+            weekly[day] = (window[0], window[1])
+
+    if not weekly:
+        raise ValueError("owner_available must define default_window or weekly")
+    return weekly
+
+
 def load_tenants(configs_dir: str) -> TenantRegistry:
     base = Path(configs_dir)
     index = json.loads((base / "index.json").read_text())
@@ -42,10 +73,7 @@ def load_tenants(configs_dir: str) -> TenantRegistry:
         if not entry.is_dir():
             continue
         tj = _expand_env(json.loads((entry / "tenant.json").read_text()))
-        weekly_raw = tj["owner_available"]["weekly"]
-        weekly: dict[str, tuple[str, str]] = {
-            day: (window[0], window[1]) for day, window in weekly_raw.items()
-        }
+        weekly = _expand_weekly(tj["owner_available"])
         specials_file = entry / "specials.json"
         specials_raw = json.loads(specials_file.read_text()) if specials_file.exists() else []
         specials = [MenuItem.model_validate(item) for item in specials_raw]
@@ -63,6 +91,7 @@ def load_tenants(configs_dir: str) -> TenantRegistry:
             location_notes=(entry / "location-notes.md").read_text(),
             specials=specials,
             order_url=tj.get("order_url", ""),
+            greeting=tj.get("greeting", ""),
             owner_phone_is_temporary=tj.get("owner_phone_is_temporary", False),
         )
     return TenantRegistry(tenants=tenants, by_twilio_number=index["tenants_by_twilio_number"])

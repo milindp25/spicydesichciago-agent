@@ -87,6 +87,38 @@ async def test_take_message_posts_full_body() -> None:
     assert body["caller_name"] == "Asha"
 
 
+async def test_get_tenant_returns_snapshot() -> None:
+    api = FakeApi(json_responder({"slug": "spicy-desi", "owner_available": True, "greeting": "Hi"}))
+    c = _client(api)
+    try:
+        result = await c.get_tenant()
+    finally:
+        await c.aclose()
+    assert result["owner_available"] is True
+    assert api.requests[0].url.path == "/api/tenant"
+
+
+async def test_retry_on_503_then_success() -> None:
+    import httpx
+
+    calls = {"n": 0}
+
+    def responder(req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503, json={"error": "transient"})
+        return httpx.Response(200, json={"items": []})
+
+    api = FakeApi(responder)
+    c = _client(api)
+    try:
+        result = await c.get_specials()
+    finally:
+        await c.aclose()
+    assert result == {"items": []}
+    assert calls["n"] == 2
+
+
 async def test_request_transfer_posts_call_sid() -> None:
     api = FakeApi(json_responder({"action": "transfer", "redirect_ok": True}))
     c = _client(api)
