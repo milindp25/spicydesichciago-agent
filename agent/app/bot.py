@@ -8,8 +8,10 @@ real pipeline runs only when answering a call.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,10 @@ log = logging.getLogger(__name__)
 # Hard cap on caller<->bot conversation duration. After this, the bot tells the
 # caller it's connecting them and triggers a transfer to the owner.
 MAX_CALL_SECONDS = 90
+
+# Don't blow up the LLM context with messages we'd never replay; persistence
+# only needs enough turns to debug what was said.
+TRANSCRIPT_TAIL = 40
 
 
 def load_system_prompt() -> str:
@@ -63,6 +69,49 @@ def _format_caller_history(history: dict[str, Any]) -> str:
         if summary:
             lines.append(f"- {summary}")
     return "\n".join(lines)
+
+
+def _build_call_context(
+    *,
+    history_note: str,
+    from_phone: str,
+    owner_available: bool,
+    greeting: str,
+) -> str:
+    parts = [f"Call context — caller phone: {from_phone or 'unknown'}.", history_note]
+    if not owner_available:
+        parts.append(
+            "Owner is currently OUTSIDE business hours — DO NOT call request_transfer. "
+            "If the caller asks to speak to the owner, apologize and offer to take a "
+            "message via take_message instead."
+        )
+    if greeting:
+        parts.append(f'Use this exact opening line when greeting the caller: "{greeting}"')
+    return " ".join(parts)
+
+
+async def _persist_transcript(
+    api: ApiClient, *, call_sid: str, messages: list[dict[str, Any]], started_at: float
+) -> None:
+    """Dump the tail of the conversation to the JSONL log on disconnect."""
+    try:
+        tail = messages[-TRANSCRIPT_TAIL:]
+        cleaned = [
+            {"role": m.get("role"), "content": str(m.get("content", ""))[:2000]}
+            for m in tail
+            if m.get("role") in {"user", "assistant", "system"}
+        ]
+        await api.append_event(
+            call_sid=call_sid,
+            kind="call_ended",
+            payload={
+                "duration_secs": round(time.time() - started_at, 1),
+                "turns": len(cleaned),
+                "transcript": cleaned,
+            },
+        )
+    except Exception:
+        log.exception("transcript persist failed")
 
 
 async def run_bot(
@@ -118,7 +167,6 @@ async def run_bot(
         settings=DeepgramSTTSettings(model="nova-3", language="en-US"),
     )
     if settings.llm_base_url:
-        # OpenAI-compatible endpoint — Ollama, LM Studio, vLLM, OpenRouter, etc.
         log.info(
             "using OpenAI-compatible LLM",
             extra={"base_url": settings.llm_base_url, "model": settings.llm_model},
@@ -147,8 +195,18 @@ async def run_bot(
         tenant=settings.default_tenant,
     )
 
-    # Best-effort caller history lookup. Failure is non-fatal (e.g. API down,
-    # unknown caller, no events file) — we just treat them as a new caller.
+    # Prefetch tenant snapshot + caller history. Both are best-effort —
+    # failure here means the call still answers, just without the per-call
+    # personalization.
+    greeting = ""
+    owner_available = True
+    try:
+        tenant_info = await api.get_tenant()
+        greeting = tenant_info.get("greeting") or ""
+        owner_available = bool(tenant_info.get("owner_available", True))
+    except Exception:
+        log.exception("tenant snapshot failed; defaulting owner_available=True")
+
     history_note = "First-time caller."
     if from_phone:
         try:
@@ -179,7 +237,14 @@ async def run_bot(
                 from_phone=from_phone,
             )
         except Exception as exc:
+            log.exception("tool error", extra={"name": params.function_name})
             payload: dict[str, Any] = {"error": str(exc)}
+            with contextlib.suppress(Exception):
+                await api.append_event(
+                    call_sid=call_sid,
+                    kind="tool_error",
+                    payload={"tool": params.function_name, "error": str(exc)},
+                )
         else:
             try:
                 payload = json.loads(result_str)
@@ -196,9 +261,11 @@ async def run_bot(
             {"role": "system", "content": load_system_prompt()},
             {
                 "role": "system",
-                "content": (
-                    f"Call context — caller phone: {from_phone or 'unknown'}. "
-                    f"{history_note}"
+                "content": _build_call_context(
+                    history_note=history_note,
+                    from_phone=from_phone,
+                    owner_available=owner_available,
+                    greeting=greeting,
                 ),
             },
         ],
@@ -206,20 +273,23 @@ async def run_bot(
     )
     aggregators = LLMContextAggregatorPair(context)
 
-    owner_shortcut = OwnerShortcut(api=api, call_sid=call_sid)
+    # Owner-transfer shortcut is disabled after hours — falls back to the
+    # LLM, which will offer to take a message instead of attempting transfer.
+    pipeline_steps = [
+        transport.input(),
+        stt,
+    ]
+    if owner_available:
+        pipeline_steps.append(OwnerShortcut(api=api, call_sid=call_sid))
+    pipeline_steps += [
+        aggregators.user(),
+        llm,
+        tts,
+        transport.output(),
+        aggregators.assistant(),
+    ]
 
-    pipeline = Pipeline(
-        [
-            transport.input(),
-            stt,
-            owner_shortcut,  # short-circuits "connect me to the owner" before LLM
-            aggregators.user(),
-            llm,
-            tts,
-            transport.output(),
-            aggregators.assistant(),
-        ]
-    )
+    pipeline = Pipeline(pipeline_steps)
 
     task = PipelineTask(
         pipeline,
@@ -230,6 +300,7 @@ async def run_bot(
         ),
     )
 
+    started_at = time.time()
     timeout_task: asyncio.Task | None = None
 
     async def _force_transfer_after_timeout() -> None:
@@ -241,26 +312,46 @@ async def run_bot(
             "call exceeded MAX_CALL_SECONDS — forcing transfer",
             extra={"call_sid": call_sid, "limit": MAX_CALL_SECONDS},
         )
-        # Tell the LLM to wrap up + transfer. The LLM's next reply should
-        # call request_transfer.
-        context.add_message(
-            {
-                "role": "system",
-                "content": (
-                    "The conversation has reached the 90-second cap. Politely tell the "
-                    "caller you're connecting them to the owner now, and immediately call "
-                    "request_transfer with reason='90-second cap reached'."
-                ),
-            }
-        )
+        if owner_available:
+            context.add_message(
+                {
+                    "role": "system",
+                    "content": (
+                        "The conversation has reached the 90-second cap. Politely tell the "
+                        "caller you're connecting them to the owner now, and immediately call "
+                        "request_transfer with reason='90-second cap reached'."
+                    ),
+                }
+            )
+        else:
+            context.add_message(
+                {
+                    "role": "system",
+                    "content": (
+                        "The conversation has reached the 90-second cap. Wrap up: take a "
+                        "message via take_message and tell the caller the owner will ring back."
+                    ),
+                }
+            )
         try:
             await task.queue_frames([LLMRunFrame()])
         except Exception:
             log.exception("failed to queue transfer prompt at timeout")
 
+    async def _on_started() -> None:
+        try:
+            await api.append_event(
+                call_sid=call_sid,
+                kind="call_started",
+                payload={"from": from_phone, "owner_available": owner_available},
+            )
+        except Exception:
+            log.exception("call_started log failed")
+
     @transport.event_handler("on_client_connected")
     async def _on_connected(_t: Any, _client: Any) -> None:
         nonlocal timeout_task
+        await _on_started()
         context.add_message({"role": "user", "content": "Greet the caller now."})
         await task.queue_frames([LLMRunFrame()])
         timeout_task = asyncio.create_task(_force_transfer_after_timeout())
@@ -277,4 +368,10 @@ async def run_bot(
     finally:
         if timeout_task and not timeout_task.done():
             timeout_task.cancel()
+        await _persist_transcript(
+            api,
+            call_sid=call_sid,
+            messages=list(context.messages),
+            started_at=started_at,
+        )
         await api.aclose()
