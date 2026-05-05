@@ -12,6 +12,7 @@ import contextlib
 import json
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +91,19 @@ def _build_call_context(
     return " ".join(parts)
 
 
+def _coerce_tool_args(raw_args: Any) -> dict[str, Any]:
+    """LLM SDKs disagree on how to pass tool args — normalize to a dict."""
+    if raw_args is None:
+        return {}
+    if isinstance(raw_args, str):
+        try:
+            parsed = json.loads(raw_args) if raw_args else {}
+        except Exception:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return dict(raw_args)
+
+
 async def _persist_transcript(
     api: ApiClient, *, call_sid: str, messages: list[dict[str, Any]], started_at: float
 ) -> None:
@@ -114,30 +128,56 @@ async def _persist_transcript(
         log.exception("transcript persist failed")
 
 
-async def run_bot(
-    websocket: Any,
-    *,
-    settings: AgentSettings,
-    stream_sid: str,
-    call_sid: str,
-    from_phone: str = "",
-) -> None:
-    """Build and run the Pipecat voice-agent pipeline for a single call."""
-    from pipecat.audio.vad.silero import SileroVADAnalyzer
-    from pipecat.audio.vad.vad_analyzer import VADParams
-    from pipecat.frames.frames import LLMRunFrame
-    from pipecat.pipeline.pipeline import Pipeline
-    from pipecat.pipeline.runner import PipelineRunner
-    from pipecat.pipeline.task import PipelineParams, PipelineTask
-    from pipecat.processors.aggregators.llm_context import LLMContext
-    from pipecat.processors.aggregators.llm_response_universal import (
-        LLMContextAggregatorPair,
-    )
-    from pipecat.serializers.twilio import TwilioFrameSerializer
-    from pipecat.services.cartesia.tts import CartesiaTTSService, CartesiaTTSSettings
-    from pipecat.services.deepgram.stt import DeepgramSTTService, DeepgramSTTSettings
+async def _prefetch_call_state(
+    api: ApiClient, *, from_phone: str
+) -> tuple[str, bool, str]:
+    """Returns (greeting, owner_available, history_note). Best-effort."""
+    greeting = ""
+    owner_available = True
+    try:
+        info = await api.get_tenant()
+        greeting = info.get("greeting") or ""
+        owner_available = bool(info.get("owner_available", True))
+    except Exception:
+        log.exception("tenant snapshot failed; defaulting owner_available=True")
+
+    history_note = "First-time caller."
+    if from_phone:
+        try:
+            history = await api.get_caller_history(phone=from_phone)
+            history_note = _format_caller_history(history)
+        except Exception:
+            log.exception("caller history lookup failed", extra={"phone": from_phone})
+
+    return greeting, owner_available, history_note
+
+
+def _build_llm(settings: AgentSettings) -> Any:
     from pipecat.services.groq.llm import GroqLLMService
     from pipecat.services.openai.llm import OpenAILLMService
+
+    if settings.llm_base_url:
+        log.info(
+            "using OpenAI-compatible LLM",
+            extra={"base_url": settings.llm_base_url, "model": settings.llm_model},
+        )
+        return OpenAILLMService(
+            api_key=settings.llm_api_key or "not-needed",
+            base_url=settings.llm_base_url,
+            model=settings.llm_model,
+        )
+    return GroqLLMService(
+        api_key=settings.groq_api_key,
+        model=settings.llm_model or "llama-3.3-70b-versatile",
+    )
+
+
+def _build_transport(
+    websocket: Any, *, stream_sid: str, call_sid: str
+) -> Any:
+    from pipecat.audio.vad.silero import SileroVADAnalyzer
+    from pipecat.audio.vad.vad_analyzer import VADParams
+    from pipecat.serializers.twilio import TwilioFrameSerializer
     from pipecat.transports.websocket.fastapi import (
         FastAPIWebsocketParams,
         FastAPIWebsocketTransport,
@@ -148,8 +188,7 @@ async def run_bot(
         call_sid=call_sid,
         params=TwilioFrameSerializer.InputParams(auto_hang_up=False),
     )
-
-    transport = FastAPIWebsocketTransport(
+    return FastAPIWebsocketTransport(
         websocket=websocket,
         params=FastAPIWebsocketParams(
             audio_in_enabled=True,
@@ -162,26 +201,20 @@ async def run_bot(
         ),
     )
 
-    stt = DeepgramSTTService(
+
+def _build_stt(settings: AgentSettings) -> Any:
+    from pipecat.services.deepgram.stt import DeepgramSTTService, DeepgramSTTSettings
+
+    return DeepgramSTTService(
         api_key=settings.deepgram_api_key,
         settings=DeepgramSTTSettings(model="nova-3", language="en-US"),
     )
-    if settings.llm_base_url:
-        log.info(
-            "using OpenAI-compatible LLM",
-            extra={"base_url": settings.llm_base_url, "model": settings.llm_model},
-        )
-        llm = OpenAILLMService(
-            api_key=settings.llm_api_key or "not-needed",
-            base_url=settings.llm_base_url,
-            model=settings.llm_model,
-        )
-    else:
-        llm = GroqLLMService(
-            api_key=settings.groq_api_key,
-            model=settings.llm_model or "llama-3.3-70b-versatile",
-        )
-    tts = CartesiaTTSService(
+
+
+def _build_tts(settings: AgentSettings) -> Any:
+    from pipecat.services.cartesia.tts import CartesiaTTSService, CartesiaTTSSettings
+
+    return CartesiaTTSService(
         api_key=settings.cartesia_api_key,
         settings=CartesiaTTSSettings(
             voice=settings.cartesia_voice_id,
@@ -189,45 +222,12 @@ async def run_bot(
         ),
     )
 
-    api = ApiClient(
-        base_url=settings.tools_api_base,
-        secret=settings.tools_shared_secret,
-        tenant=settings.default_tenant,
-    )
 
-    # Prefetch tenant snapshot + caller history. Both are best-effort —
-    # failure here means the call still answers, just without the per-call
-    # personalization.
-    greeting = ""
-    owner_available = True
-    try:
-        tenant_info = await api.get_tenant()
-        greeting = tenant_info.get("greeting") or ""
-        owner_available = bool(tenant_info.get("owner_available", True))
-    except Exception:
-        log.exception("tenant snapshot failed; defaulting owner_available=True")
-
-    history_note = "First-time caller."
-    if from_phone:
-        try:
-            history = await api.get_caller_history(phone=from_phone)
-            history_note = _format_caller_history(history)
-        except Exception:
-            log.exception("caller history lookup failed", extra={"phone": from_phone})
-
-    async def _tool_handler(params: Any) -> None:
-        raw_args = params.arguments
-        if raw_args is None:
-            args: dict[str, Any] = {}
-        elif isinstance(raw_args, str):
-            try:
-                parsed = json.loads(raw_args) if raw_args else {}
-            except Exception:
-                parsed = {}
-            args = parsed if isinstance(parsed, dict) else {}
-        else:
-            args = dict(raw_args)
-
+def _make_tool_handler(
+    *, api: ApiClient, call_sid: str, from_phone: str
+) -> Callable[[Any], Awaitable[None]]:
+    async def _handler(params: Any) -> None:
+        args = _coerce_tool_args(params.arguments)
         try:
             result_str = await handle_tool_call(
                 params.function_name,
@@ -253,9 +253,69 @@ async def run_bot(
 
         await params.result_callback(payload)
 
-    llm.register_function(None, _tool_handler)
+    return _handler
 
-    tools = _tools_schema_from_definitions()
+
+def _build_pipeline(
+    *,
+    transport: Any,
+    stt: Any,
+    llm: Any,
+    tts: Any,
+    aggregators: Any,
+    owner_shortcut: OwnerShortcut | None,
+) -> Any:
+    from pipecat.pipeline.pipeline import Pipeline
+
+    steps = [transport.input(), stt]
+    if owner_shortcut is not None:
+        steps.append(owner_shortcut)
+    steps += [
+        aggregators.user(),
+        llm,
+        tts,
+        transport.output(),
+        aggregators.assistant(),
+    ]
+    return Pipeline(steps)
+
+
+async def run_bot(
+    websocket: Any,
+    *,
+    settings: AgentSettings,
+    stream_sid: str,
+    call_sid: str,
+    from_phone: str = "",
+) -> None:
+    """Build and run the Pipecat voice-agent pipeline for a single call."""
+    from pipecat.frames.frames import LLMRunFrame
+    from pipecat.pipeline.runner import PipelineRunner
+    from pipecat.pipeline.task import PipelineParams, PipelineTask
+    from pipecat.processors.aggregators.llm_context import LLMContext
+    from pipecat.processors.aggregators.llm_response_universal import (
+        LLMContextAggregatorPair,
+    )
+
+    api = ApiClient(
+        base_url=settings.tools_api_base,
+        secret=settings.tools_shared_secret,
+        tenant=settings.default_tenant,
+    )
+
+    greeting, owner_available, history_note = await _prefetch_call_state(
+        api, from_phone=from_phone
+    )
+
+    transport = _build_transport(websocket, stream_sid=stream_sid, call_sid=call_sid)
+    stt = _build_stt(settings)
+    llm = _build_llm(settings)
+    tts = _build_tts(settings)
+
+    llm.register_function(
+        None, _make_tool_handler(api=api, call_sid=call_sid, from_phone=from_phone)
+    )
+
     context = LLMContext(
         messages=[
             {"role": "system", "content": load_system_prompt()},
@@ -269,27 +329,24 @@ async def run_bot(
                 ),
             },
         ],
-        tools=tools,
+        tools=_tools_schema_from_definitions(),
     )
     aggregators = LLMContextAggregatorPair(context)
 
-    # Owner-transfer shortcut is disabled after hours — falls back to the
-    # LLM, which will offer to take a message instead of attempting transfer.
-    pipeline_steps = [
-        transport.input(),
-        stt,
-    ]
-    if owner_available:
-        pipeline_steps.append(OwnerShortcut(api=api, call_sid=call_sid))
-    pipeline_steps += [
-        aggregators.user(),
-        llm,
-        tts,
-        transport.output(),
-        aggregators.assistant(),
-    ]
+    # Owner-transfer shortcut is disabled after hours — the LLM falls back
+    # to take_message instead of attempting transfer.
+    owner_shortcut = (
+        OwnerShortcut(api=api, call_sid=call_sid) if owner_available else None
+    )
 
-    pipeline = Pipeline(pipeline_steps)
+    pipeline = _build_pipeline(
+        transport=transport,
+        stt=stt,
+        llm=llm,
+        tts=tts,
+        aggregators=aggregators,
+        owner_shortcut=owner_shortcut,
+    )
 
     task = PipelineTask(
         pipeline,
@@ -313,45 +370,31 @@ async def run_bot(
             extra={"call_sid": call_sid, "limit": MAX_CALL_SECONDS},
         )
         if owner_available:
-            context.add_message(
-                {
-                    "role": "system",
-                    "content": (
-                        "The conversation has reached the 90-second cap. Politely tell the "
-                        "caller you're connecting them to the owner now, and immediately call "
-                        "request_transfer with reason='90-second cap reached'."
-                    ),
-                }
+            cap_msg = (
+                "The conversation has reached the 90-second cap. Politely tell the "
+                "caller you're connecting them to the owner now, and immediately call "
+                "request_transfer with reason='90-second cap reached'."
             )
         else:
-            context.add_message(
-                {
-                    "role": "system",
-                    "content": (
-                        "The conversation has reached the 90-second cap. Wrap up: take a "
-                        "message via take_message and tell the caller the owner will ring back."
-                    ),
-                }
+            cap_msg = (
+                "The conversation has reached the 90-second cap. Wrap up: take a "
+                "message via take_message and tell the caller the owner will ring back."
             )
+        context.add_message({"role": "system", "content": cap_msg})
         try:
             await task.queue_frames([LLMRunFrame()])
         except Exception:
             log.exception("failed to queue transfer prompt at timeout")
 
-    async def _on_started() -> None:
-        try:
+    @transport.event_handler("on_client_connected")
+    async def _on_connected(_t: Any, _client: Any) -> None:
+        nonlocal timeout_task
+        with contextlib.suppress(Exception):
             await api.append_event(
                 call_sid=call_sid,
                 kind="call_started",
                 payload={"from": from_phone, "owner_available": owner_available},
             )
-        except Exception:
-            log.exception("call_started log failed")
-
-    @transport.event_handler("on_client_connected")
-    async def _on_connected(_t: Any, _client: Any) -> None:
-        nonlocal timeout_task
-        await _on_started()
         context.add_message({"role": "user", "content": "Greet the caller now."})
         await task.queue_frames([LLMRunFrame()])
         timeout_task = asyncio.create_task(_force_transfer_after_timeout())
