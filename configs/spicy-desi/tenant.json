@@ -19,5 +19,6 @@
   "sms_confirmation_to_caller": true,
   "location_overrides": {},
   "order_url": "${ORDER_URL}",
+  "greeting": "Hey, Spicy Desi — heads up, this call may be recorded for quality. What can I get for ya?",
   "owner_phone_is_temporary": true
 }
