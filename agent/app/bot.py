@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import AgentSettings
+from app.intents import OwnerShortcut
 from app.tools.api_client import ApiClient
 from app.tools.definitions import TOOL_DEFINITIONS
 from app.tools.handlers import handle_tool_call
@@ -205,10 +206,13 @@ async def run_bot(
     )
     aggregators = LLMContextAggregatorPair(context)
 
+    owner_shortcut = OwnerShortcut(api=api, call_sid=call_sid)
+
     pipeline = Pipeline(
         [
             transport.input(),
             stt,
+            owner_shortcut,  # short-circuits "connect me to the owner" before LLM
             aggregators.user(),
             llm,
             tts,
