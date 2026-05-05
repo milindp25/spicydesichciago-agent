@@ -1,0 +1,28 @@
+[Unit]
+Description=Spicy Desi API (FastAPI, Plan 1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/spicydesichciago-agent/api
+EnvironmentFile=/home/ubuntu/spicydesichciago-agent/api/.env
+ExecStart=/home/ubuntu/spicydesichciago-agent/api/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 1
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/spicydesichciago-agent/api/data /var/lib/spicy-desi
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

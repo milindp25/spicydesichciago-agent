@@ -1,0 +1,50 @@
+# Caddyfile for Spicy Desi voice agent.
+#
+# Caddy auto-provisions Let's Encrypt certs for both subdomains and
+# proxies to the local FastAPI services. Logs go to journald (systemd).
+#
+# Place at /etc/caddy/Caddyfile and reload with:
+#   sudo systemctl reload caddy
+
+api.spicydesichciago.com {
+	encode zstd gzip
+
+	# /api/* and /healthz served by the API service.
+	reverse_proxy 127.0.0.1:8080 {
+		header_up Host {host}
+		header_up X-Real-IP {remote}
+		header_up X-Forwarded-For {remote}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+agent.spicydesichciago.com {
+	encode zstd gzip
+
+	# /twilio/inbound, /twilio/dial-owner*, /twilio/stream (WebSocket).
+	# WebSockets are forwarded automatically by reverse_proxy.
+	reverse_proxy 127.0.0.1:8090 {
+		header_up Host {host}
+		header_up X-Real-IP {remote}
+		header_up X-Forwarded-For {remote}
+		header_up X-Forwarded-Proto {scheme}
+		# Twilio Media Streams keep WebSocket connections open for the
+		# duration of a call (up to MAX_CALL_SECONDS). Generous timeouts
+		# avoid Caddy killing the stream mid-call.
+		transport http {
+			read_timeout 5m
+			write_timeout 5m
+			dial_timeout 10s
+		}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
