@@ -21,22 +21,41 @@ from app.tools.api_client import ApiClient
 
 log = logging.getLogger(__name__)
 
-# Conservative pattern — requires an explicit "transfer/connect/speak/talk"
-# verb together with an owner/manager/human noun, so menu questions like
-# "does the owner have a special?" don't trip it.
-_OWNER_INTENT = re.compile(
-    r"\b("
-    r"(connect|transfer|put|get|patch)\s+(me\s+)?(through\s+)?(to|with)\s+(the\s+|your\s+|an\s+|a\s+)?(owner|manager|human|real\s+(person|human)|someone)"
-    r"|(speak|talk)\s+(to|with)\s+(the\s+|your\s+|a\s+)?(owner|manager|human|real\s+(person|human)|someone(\s+else)?(\s+in\s+charge)?)"
-    r"|i\s+(want|need|wanna|gotta)\s+(to\s+)?(speak|talk|connect)\s+(to|with)\s+(the\s+|your\s+|a\s+)?(owner|manager|human)"
-    r"|transfer\s+me"
-    r")\b",
+
+# Owner-transfer intent recognizer.
+#
+# Three independently-tuned patterns. Each is conservative enough to avoid
+# false positives on menu questions like "does the owner have a special?":
+#   1. action verb + "to/with" + person noun  ("connect me to the manager")
+#   2. desire verb + speak/talk + "to/with" + person noun  ("I want to speak to the owner")
+#   3. bare "transfer me"  (the canonical short form)
+_PERSON = (
+    r"(?:owner|manager|human|real\s+(?:person|human)|"
+    r"someone(?:\s+else)?(?:\s+in\s+charge)?)"
+)
+_DET = r"(?:the\s+|your\s+|an?\s+)?"
+
+_VERB_TO_PERSON = re.compile(
+    rf"\b(?:connect|transfer|put|get|patch)\s+(?:me\s+)?(?:through\s+)?"
+    rf"(?:to|with)\s+{_DET}{_PERSON}\b"
+    rf"|\b(?:speak|talk)\s+(?:to|with)\s+{_DET}{_PERSON}\b",
     re.IGNORECASE,
 )
+_WANT_TO_SPEAK = re.compile(
+    rf"\bi\s+(?:want|need|wanna|gotta)\s+(?:to\s+)?"
+    rf"(?:speak|talk|connect)\s+(?:to|with)\s+{_DET}{_PERSON}\b",
+    re.IGNORECASE,
+)
+_BARE_TRANSFER_ME = re.compile(r"\btransfer\s+me\b", re.IGNORECASE)
 
 
 def is_owner_transfer_request(text: str) -> bool:
-    return bool(_OWNER_INTENT.search(text or ""))
+    haystack = text or ""
+    return bool(
+        _VERB_TO_PERSON.search(haystack)
+        or _WANT_TO_SPEAK.search(haystack)
+        or _BARE_TRANSFER_ME.search(haystack)
+    )
 
 
 class OwnerShortcut(FrameProcessor):
