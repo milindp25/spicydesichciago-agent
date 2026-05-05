@@ -63,6 +63,7 @@ def load_tenants(configs_dir: str) -> TenantRegistry:
             location_notes=(entry / "location-notes.md").read_text(),
             specials=specials,
             order_url=tj.get("order_url", ""),
+            greeting=tj.get("greeting", ""),
             owner_phone_is_temporary=tj.get("owner_phone_is_temporary", False),
         )
     return TenantRegistry(tenants=tenants, by_twilio_number=index["tenants_by_twilio_number"])

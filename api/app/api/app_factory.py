@@ -15,9 +15,11 @@ from app.api.routes import (
     locations,
     menu,
     messages,
+    metrics,
     pickup,
     sms,
     specials,
+    tenant,
     transfers,
     webhooks_square,
 )
@@ -52,5 +54,7 @@ def build_app(deps: AppState) -> FastAPI:
     app.include_router(pickup.router)
     app.include_router(sms.router)
     app.include_router(callers.router)
+    app.include_router(tenant.router)
+    app.include_router(metrics.router)
     app.include_router(webhooks_square.router)
     return app
