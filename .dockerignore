@@ -1,0 +1,37 @@
+# Git
+.git/
+.gitignore
+.github/
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.venv/
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Documentation
+docs/
+*.md
+
+# Test data
+**/tests/
+
+# IaC and tooling that doesn't belong in images
+deploy/
+docker-compose.yml
+
+# When building api, don't ship agent/ (and vice versa).
+# Per-service .dockerignore files handle the narrower exclusions.
+# This root file only excludes things that should never enter ANY image.
