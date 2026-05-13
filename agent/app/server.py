@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from xml.sax.saxutils import quoteattr
 
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.responses import PlainTextResponse
@@ -64,7 +65,7 @@ def build_app(settings: AgentSettings) -> FastAPI:
         # Twilio Stream <Parameter>. The Pipecat side reads this from the
         # `start` event's customParameters.
         from_param = (from_phone or "").strip()
-        param_xml = f'    <Parameter name="from" value="{from_param}"/>\n' if from_param else ""
+        param_xml = f"    <Parameter name=\"from\" value={quoteattr(from_param)}/>\n" if from_param else ""
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             "<Response>\n"
