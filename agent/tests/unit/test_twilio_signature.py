@@ -1,7 +1,6 @@
 """Tests for TwilioSignatureVerifier."""
 from __future__ import annotations
 
-import pytest
 from twilio.request_validator import RequestValidator
 
 from app.security.twilio_signature import TwilioSignatureVerifier
