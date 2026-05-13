@@ -1,0 +1,31 @@
+app = "spicy-desi-api"
+primary_region = "ord"
+
+[env]
+  PORT = "8080"
+  LOG_LEVEL = "info"
+  APP_ENV = "production"
+  CONFIGS_DIR = "/app/configs"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 50
+    hard_limit = 100
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
