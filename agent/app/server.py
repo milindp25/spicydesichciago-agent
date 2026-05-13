@@ -13,6 +13,22 @@ from app.security.twilio_signature import TwilioSignatureVerifier
 log = logging.getLogger(__name__)
 
 
+def _full_url(request: Request) -> str:
+    """Reconstruct the absolute URL Twilio signed.
+
+    Behind Fly's TLS-terminating proxy, Uvicorn must run with
+    --proxy-headers so request.url.scheme reflects X-Forwarded-Proto;
+    otherwise this returns http:// and signature verification fails.
+    """
+    scheme = request.url.scheme
+    host = request.headers.get("host", "")
+    path = request.url.path
+    query = request.url.query
+    if query:
+        return f"{scheme}://{host}{path}?{query}"
+    return f"{scheme}://{host}{path}"
+
+
 def build_app(settings: AgentSettings) -> FastAPI:
     app = FastAPI(title="Spicy Desi Agent")
     verifier = TwilioSignatureVerifier(auth_token=settings.twilio_auth_token)
@@ -27,26 +43,12 @@ def build_app(settings: AgentSettings) -> FastAPI:
             "TWILIO_AUTH_TOKEN unset - Twilio signature verification DISABLED (dev mode)"
         )
 
-    def _full_url(request: Request) -> str:
-        # Behind Fly's proxy, Uvicorn must run with --proxy-headers so
-        # request.url.scheme reflects X-Forwarded-Proto. We reconstruct
-        # the URL from scheme + host header + path to match what Twilio
-        # signed.
-        scheme = request.url.scheme
-        host = request.headers.get("host", "")
-        path = request.url.path
-        query = request.url.query
-        if query:
-            return f"{scheme}://{host}{path}?{query}"
-        return f"{scheme}://{host}{path}"
-
-    async def _verify_twilio(request: Request) -> dict[str, str]:
+    async def _verify_twilio(request: Request) -> None:
         form = await request.form()
         form_dict = {k: str(v) for k, v in form.items()}
         sig = request.headers.get("X-Twilio-Signature")
         if not verifier.verify(url=_full_url(request), form=form_dict, signature=sig):
             raise HTTPException(status_code=403, detail="invalid twilio signature")
-        return form_dict
 
     @app.get("/healthz")
     async def healthz() -> dict[str, bool]:
@@ -54,8 +56,9 @@ def build_app(settings: AgentSettings) -> FastAPI:
 
     @app.post("/twilio/inbound")
     async def twilio_inbound(request: Request) -> PlainTextResponse:
-        form_dict = await _verify_twilio(request)
-        from_phone = form_dict.get("From")
+        await _verify_twilio(request)
+        form = await request.form()
+        from_phone = form.get("From")
         host = request.headers.get("host", "")
         # Pass the caller's phone number through to the WebSocket via a
         # Twilio Stream <Parameter>. The Pipecat side reads this from the
@@ -87,14 +90,14 @@ def build_app(settings: AgentSettings) -> FastAPI:
 
     @app.post("/twilio/dial-owner-fallback")
     async def dial_owner_fallback(request: Request) -> PlainTextResponse:
-        form_dict = await _verify_twilio(request)
-        DialCallStatus = form_dict.get("DialCallStatus")  # noqa: N806
+        await _verify_twilio(request)
+        form = await request.form()
+        dial_call_status = str(form.get("DialCallStatus") or "").lower()
         host = request.headers.get("host", "")
-        status = (DialCallStatus or "").lower()
-        log.info("dial-owner-fallback fired", extra={"DialCallStatus": status})
+        log.info("dial-owner-fallback fired", extra={"dial_call_status": dial_call_status})
 
         # Caller and owner finished a normal conversation -> just hang up.
-        if status == "completed":
+        if dial_call_status == "completed":
             twiml = (
                 '<?xml version="1.0" encoding="UTF-8"?>\n'
                 "<Response><Hangup/></Response>"
@@ -102,12 +105,12 @@ def build_app(settings: AgentSettings) -> FastAPI:
             return PlainTextResponse(twiml, media_type="application/xml")
 
         # Phrasing depends on why the dial failed.
-        if status in ("failed", "canceled"):
+        if dial_call_status in ("failed", "canceled"):
             say = (
                 "Hmm, looks like that number's not reachable. "
                 "Let me grab a message for the owner instead."
             )
-        elif status == "busy":
+        elif dial_call_status == "busy":
             say = "Owner's on another call. Let me take a message and they'll ring you back."
         else:  # no-answer or anything else
             say = "Owner didn't pick up. Let me take a message and they'll ring you back."
