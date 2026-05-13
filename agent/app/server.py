@@ -3,27 +3,45 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import FastAPI, Form, Query, Request, WebSocket
+from fastapi import FastAPI, Form, HTTPException, Query, Request, WebSocket
 from fastapi.responses import PlainTextResponse
 
 from app.bot import run_bot
 from app.config import AgentSettings
+from app.security.twilio_signature import TwilioSignatureVerifier
 
 log = logging.getLogger(__name__)
 
 
 def build_app(settings: AgentSettings) -> FastAPI:
     app = FastAPI(title="Spicy Desi Agent")
+    verifier = TwilioSignatureVerifier(auth_token=settings.twilio_auth_token)
+
+    def _full_url(request: Request) -> str:
+        # Behind Fly's proxy, Uvicorn must run with --proxy-headers so
+        # request.url.scheme reflects X-Forwarded-Proto. We reconstruct
+        # the URL from scheme + host header + path to match what Twilio
+        # signed.
+        scheme = request.url.scheme
+        host = request.headers.get("host", "")
+        return f"{scheme}://{host}{request.url.path}"
+
+    async def _verify_twilio(request: Request) -> dict[str, str]:
+        form = await request.form()
+        form_dict = {k: str(v) for k, v in form.items()}
+        sig = request.headers.get("X-Twilio-Signature")
+        if not verifier.verify(url=_full_url(request), form=form_dict, signature=sig):
+            raise HTTPException(status_code=403, detail="invalid twilio signature")
+        return form_dict
 
     @app.get("/healthz")
     async def healthz() -> dict[str, bool]:
         return {"ok": True}
 
     @app.post("/twilio/inbound")
-    async def twilio_inbound(
-        request: Request,
-        from_phone: str | None = Form(None, alias="From"),
-    ) -> PlainTextResponse:
+    async def twilio_inbound(request: Request) -> PlainTextResponse:
+        form_dict = await _verify_twilio(request)
+        from_phone = form_dict.get("From")
         host = request.headers.get("host", "")
         # Pass the caller's phone number through to the WebSocket via a
         # Twilio Stream <Parameter>. The Pipecat side reads this from the
