@@ -50,3 +50,46 @@ def test_inbound_accepts_anything_in_dev_mode() -> None:
     resp = client.post("/twilio/inbound", data={"From": "+15551234567"})
     assert resp.status_code == 200
     assert "<Stream" in resp.text
+
+
+def test_dial_owner_rejects_unsigned() -> None:
+    app = build_app(_settings_with_token("real-auth-token-32-bytes-long-xx"))
+    client = TestClient(app)
+    resp = client.post("/twilio/dial-owner?to=%2B15551112222")
+    assert resp.status_code == 403
+
+
+def test_dial_owner_accepts_valid_signature() -> None:
+    token = "real-auth-token-32-bytes-long-xx"
+    app = build_app(_settings_with_token(token))
+    client = TestClient(app)
+    url = "http://testserver/twilio/dial-owner?to=%2B15551112222"
+    sig = RequestValidator(token).compute_signature(url, {})
+    resp = client.post(
+        "/twilio/dial-owner?to=%2B15551112222",
+        headers={"X-Twilio-Signature": sig},
+    )
+    assert resp.status_code == 200
+    assert "<Dial" in resp.text
+
+
+def test_dial_owner_fallback_rejects_unsigned() -> None:
+    app = build_app(_settings_with_token("real-auth-token-32-bytes-long-xx"))
+    client = TestClient(app)
+    resp = client.post("/twilio/dial-owner-fallback", data={"DialCallStatus": "completed"})
+    assert resp.status_code == 403
+
+
+def test_dial_owner_fallback_accepts_valid_signature() -> None:
+    token = "real-auth-token-32-bytes-long-xx"
+    app = build_app(_settings_with_token(token))
+    client = TestClient(app)
+    form = {"DialCallStatus": "completed"}
+    url = "http://testserver/twilio/dial-owner-fallback"
+    sig = RequestValidator(token).compute_signature(url, form)
+    resp = client.post(
+        "/twilio/dial-owner-fallback",
+        data=form,
+        headers={"X-Twilio-Signature": sig},
+    )
+    assert resp.status_code == 200

@@ -24,7 +24,11 @@ def build_app(settings: AgentSettings) -> FastAPI:
         # signed.
         scheme = request.url.scheme
         host = request.headers.get("host", "")
-        return f"{scheme}://{host}{request.url.path}"
+        path = request.url.path
+        query = request.url.query
+        if query:
+            return f"{scheme}://{host}{path}?{query}"
+        return f"{scheme}://{host}{path}"
 
     async def _verify_twilio(request: Request) -> dict[str, str]:
         form = await request.form()
@@ -61,7 +65,8 @@ def build_app(settings: AgentSettings) -> FastAPI:
         return PlainTextResponse(twiml, media_type="application/xml")
 
     @app.post("/twilio/dial-owner")
-    async def dial_owner(to: str = Query(...)) -> PlainTextResponse:
+    async def dial_owner(request: Request, to: str = Query(...)) -> PlainTextResponse:
+        await _verify_twilio(request)
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             "<Response>\n"
@@ -71,10 +76,9 @@ def build_app(settings: AgentSettings) -> FastAPI:
         return PlainTextResponse(twiml, media_type="application/xml")
 
     @app.post("/twilio/dial-owner-fallback")
-    async def dial_owner_fallback(
-        request: Request,
-        DialCallStatus: str | None = Form(None),  # noqa: N803
-    ) -> PlainTextResponse:
+    async def dial_owner_fallback(request: Request) -> PlainTextResponse:
+        form_dict = await _verify_twilio(request)
+        DialCallStatus = form_dict.get("DialCallStatus")  # noqa: N806
         host = request.headers.get("host", "")
         status = (DialCallStatus or "").lower()
         log.info("dial-owner-fallback fired", extra={"DialCallStatus": status})
