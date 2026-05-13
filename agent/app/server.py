@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import FastAPI, Form, HTTPException, Query, Request, WebSocket
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.responses import PlainTextResponse
 
 from app.bot import run_bot
