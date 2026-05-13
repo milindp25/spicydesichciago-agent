@@ -17,6 +17,16 @@ def build_app(settings: AgentSettings) -> FastAPI:
     app = FastAPI(title="Spicy Desi Agent")
     verifier = TwilioSignatureVerifier(auth_token=settings.twilio_auth_token)
 
+    if not verifier.is_enabled():
+        if settings.app_env == "production":
+            raise RuntimeError(
+                "TWILIO_AUTH_TOKEN is required in production: "
+                "refusing to boot with signature verification disabled"
+            )
+        log.warning(
+            "TWILIO_AUTH_TOKEN unset - Twilio signature verification DISABLED (dev mode)"
+        )
+
     def _full_url(request: Request) -> str:
         # Behind Fly's proxy, Uvicorn must run with --proxy-headers so
         # request.url.scheme reflects X-Forwarded-Proto. We reconstruct

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -9,6 +11,7 @@ class AgentSettings(BaseSettings):
 
     port: int = Field(8090, alias="PORT")
     log_level: str = Field("info", alias="LOG_LEVEL")
+    app_env: Literal["development", "test", "production"] = Field("development", alias="APP_ENV")
 
     tools_api_base: str = Field(..., alias="TOOLS_API_BASE")
     tools_shared_secret: str = Field(..., alias="TOOLS_SHARED_SECRET", min_length=32)

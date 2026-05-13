@@ -4,6 +4,7 @@ primary_region = "ord"
 [env]
   PORT = "8090"
   LOG_LEVEL = "info"
+  APP_ENV = "production"
 
 [http_service]
   internal_port = 8090
