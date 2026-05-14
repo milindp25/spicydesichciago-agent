@@ -18,6 +18,7 @@ services:
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
       AGENT_PUBLIC_URL: ${AGENT_PUBLIC_URL:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://spicydesichicago.com}
+      APP_ENV: ${APP_ENV:-development}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz').status==200 else 1)"]
       interval: 10s
@@ -45,3 +46,4 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      APP_ENV: ${APP_ENV:-development}
