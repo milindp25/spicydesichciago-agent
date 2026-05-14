@@ -4,40 +4,73 @@ AI phone agent for Spicy Desi Chicago. Pipecat + Groq + Cartesia voice loop on t
 
 ## Repo layout
 
-- `api/` — FastAPI Python service the voice agent calls (Plan 1, **shipped**)
-- `agent/` — Pipecat voice agent (Plan 2, future)
+- `api/` — FastAPI Python service the voice agent calls (**shipped**)
+- `agent/` — Pipecat voice agent — Twilio Media Streams + Groq + Deepgram + Cartesia (**shipped**)
 - `configs/<tenant>/` — per-tenant config and FAQ
-- `deploy/` — systemd + Caddy for Oracle Cloud (Plan 3, future)
+- `deploy/` — systemd + Caddy artifacts (unused — see hosting note below)
 - `docs/superpowers/specs/` — design specs
 - `docs/superpowers/plans/` — implementation plans
 
-## Quick start (API)
+## Quick start
 
+### Option A: Docker Compose (recommended — boots both services together)
+
+Requires Docker (Docker Desktop, OrbStack, or equivalent).
+
+```bash
+# Fill in real values for both env files first
+cp agent/.env.example agent/.env
+cp api/.env.example api/.env
+# Build a merged .env.local for compose (skip if values have literal $ — escape as $$)
+{
+  grep -E "^[A-Z_]+=" agent/.env
+  grep -E "^[A-Z_]+=" api/.env
+} | awk -F= '!seen[$1]++' > .env.local
+sed -i.bak 's|^TOOLS_API_BASE=.*|TOOLS_API_BASE=http://api:8080|' .env.local && rm .env.local.bak
+
+docker compose --env-file .env.local up --build
 ```
+
+Services land at:
+- API: `http://localhost:8080`
+- Agent: `http://localhost:8090`
+
+### Option B: Native Python (faster iteration on the API)
+
+```bash
 cd api
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env  # fill in keys
+cp .env.example .env  # fill in real keys
 uvicorn app.main:app --reload --port 8080
 ```
 
 Then in a second terminal:
 
-```
-SECRET=$(python3 -c 'print("x"*32)')
+```bash
 curl http://localhost:8080/healthz
-curl -H "X-Tools-Auth: $SECRET" "http://localhost:8080/api/locations?tenant=spicy-desi"
+curl -H "X-Tools-Auth: $TOOLS_SHARED_SECRET" \
+     "http://localhost:8080/api/locations?tenant=spicy-desi"
 ```
+
+The agent runs the same way from `agent/` on port 8090.
 
 ## Tests
 
-```
-cd api && source .venv/bin/activate
-pytest
+```bash
+(cd api   && .venv/bin/pytest tests/ -q)   # 75 passed
+(cd agent && .venv/bin/pytest tests/ -q)   # 66 passed
 ```
 
-Currently 60 tests (28 unit + 32 integration), all hermetic — no live Square calls.
+All hermetic — no live Square / Twilio / Groq calls.
+
+## Security model
+
+- All Twilio webhooks (`/twilio/inbound`, `/twilio/dial-owner`, `/twilio/dial-owner-fallback`) are HMAC-validated via `X-Twilio-Signature` using `TWILIO_AUTH_TOKEN`.
+- Square webhook (`/api/webhooks/square`) is HMAC-validated via `X-Square-HmacSha256-Signature`.
+- **Production gate**: when `APP_ENV=production` and `TWILIO_AUTH_TOKEN` is empty, the agent refuses to boot (RuntimeError). This prevents a "forgot the secret" deploy from silently running with signature verification disabled. In `APP_ENV=development` (the local default) an empty token logs a WARN and the verifier accepts all requests — fine for local dev where Twilio isn't in the picture.
+- CORS pinned to `https://spicydesichicago.com` on the API.
 
 ## Architecture
 
@@ -89,14 +122,10 @@ All `/api/*` endpoints require `X-Tools-Auth: $TOOLS_SHARED_SECRET`. Tenant is s
 
 | Plan | Status | What it covers |
 |---|---|---|
-| **Plan 1** — FastAPI + Square API | ✅ Shipped (60 tests, 0 CVEs, 0 bandit issues) | Locations, hours, address, menu, specials, pickup, take-message + transfer skeletons |
-| **Plan 2** — Pipecat voice agent + Twilio | 📋 Designed, ready to implement — see [docs/superpowers/plans/2026-05-01-plan-2-pipecat-voice-agent.md](docs/superpowers/plans/2026-05-01-plan-2-pipecat-voice-agent.md) | Real Twilio SMS, live-call transfer, Pipecat pipeline (Deepgram + Groq + Cartesia), system prompt, end-to-end via ngrok |
-| **Plan 3** — Deploy + soft launch | 📋 To be designed after Plan 2 | Oracle Cloud, Caddy + systemd, R2 backups, Telugu evaluation, multilingual call testing, soft launch |
+| **Plan 1** — FastAPI + Square API | ✅ Shipped (75 tests) | Locations, hours, address, menu, specials, pickup, take-message + transfer skeletons |
+| **Plan 2** — Pipecat voice agent + Twilio | ✅ Shipped (66 tests) | Real Twilio SMS, live-call transfer, Pipecat pipeline (Deepgram + Groq + Cartesia), system prompt, owner-transfer shortcut, 90s auto-transfer, slim menu output |
+| **Deploy + security baseline** | 🚧 In progress — see [docs/superpowers/plans/2026-05-13-deploy-and-security-baseline.md](docs/superpowers/plans/2026-05-13-deploy-and-security-baseline.md) | Dockerize both services, Twilio signature validation enforced on all webhook routes, production-gate boot check, fly.toml configs. Hosting target TBD. |
 
-## Resuming work in a new session
+## Hosting status
 
-Tell the new session:
-
-> "Read `docs/superpowers/plans/2026-05-01-plan-2-pipecat-voice-agent.md` and start at Phase 0. Plan 1 is done and on `main` (60 tests passing). Confirmed assumptions: English + Hindi + Telugu via Cartesia multilingual voice from day one, single Twilio number → spicy-desi tenant."
-
-The agent should pick it up from there. Phase 0 (account provisioning) is operator-only — it'll wait until you have Twilio + Groq + Deepgram + Cartesia keys ready.
+The agent is **not yet deployed** to a public host. Both services are fully Dockerized and have `fly.toml` configs ready. Hosting decision is pending — Fly.io is the leading candidate ($0–7/mo, no cold starts), but any Docker-capable host will work (Cloud Run, Render, Hetzner). The `deploy/` directory contains unused Caddy + systemd artifacts from an earlier Oracle Cloud attempt that didn't pan out.
