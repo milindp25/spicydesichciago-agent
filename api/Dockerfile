@@ -15,7 +15,7 @@ RUN pip install --prefix=/install .
 
 FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
-    PATH="/install/bin:$PATH" PYTHONPATH="/app" \
+    PATH="/install/bin:$PATH" PYTHONPATH="/app:/install/lib/python3.12/site-packages" \
     CONFIGS_DIR=/app/configs
 
 WORKDIR /app
