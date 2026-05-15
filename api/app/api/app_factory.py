@@ -4,8 +4,11 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.dependencies import AppState
+from app.api.middleware.rate_limit import build_limiter
 from app.api.routes import (
     address,
     callers,
@@ -39,6 +42,17 @@ def build_app(deps: AppState) -> FastAPI:
             allow_methods=["GET", "POST"],
             allow_headers=["X-Tools-Auth", "Content-Type"],
             allow_credentials=False,
+        )
+
+    limiter = build_limiter()
+    app.state.limiter = limiter
+    app.add_middleware(SlowAPIMiddleware)
+
+    @app.exception_handler(RateLimitExceeded)
+    async def _on_rate_limit(_req, exc: RateLimitExceeded):
+        return JSONResponse(
+            {"error": "rate limit exceeded", "detail": str(exc.detail)},
+            status_code=429,
         )
 
     @app.exception_handler(RequestValidationError)
