@@ -22,6 +22,9 @@ from app.infrastructure.firestore_message_store import FirestoreMessageStore  # 
 from app.infrastructure.firestore_owner_override_store import (  # noqa: E402
     FirestoreOwnerOverrideStore,
 )
+from app.infrastructure.firestore_transcript_store import (  # noqa: E402
+    FirestoreTranscriptStore,
+)
 from app.infrastructure.logger import configure_logging, get_logger  # noqa: E402
 from app.infrastructure.pickup_state import PickupStateStore  # noqa: E402
 from app.infrastructure.square_client import (  # noqa: E402
@@ -79,6 +82,7 @@ def _build() -> FastAPI:
     caller_store = FirestoreCallerStore(client=db)
     message_store = FirestoreMessageStore(client=db)
     owner_override_store = FirestoreOwnerOverrideStore(client=db)
+    transcript_store = FirestoreTranscriptStore(client=db)
 
     # Initialize firebase_admin's default app (needed for auth.verify_id_token).
     # Idempotent: subsequent calls in tests are no-ops via the try/except.
@@ -105,6 +109,7 @@ def _build() -> FastAPI:
         caller_store=caller_store,
         message_store=message_store,
         owner_override_store=owner_override_store,
+        transcript_store=transcript_store,
         admin_verifier=admin_verifier,
     )
     return build_app(state)

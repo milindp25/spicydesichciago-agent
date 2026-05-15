@@ -15,6 +15,7 @@ from app.infrastructure.firestore_call_store import FirestoreCallStore
 from app.infrastructure.firestore_caller_store import FirestoreCallerStore
 from app.infrastructure.firestore_message_store import FirestoreMessageStore
 from app.infrastructure.firestore_owner_override_store import FirestoreOwnerOverrideStore
+from app.infrastructure.firestore_transcript_store import FirestoreTranscriptStore
 from app.infrastructure.pickup_state import PickupStateStore
 from app.infrastructure.tenant_registry import TenantRegistry
 from app.services.catalog_service import CatalogService
@@ -114,6 +115,7 @@ def client_factory(
             caller_store=FirestoreCallerStore(client=db),
             message_store=FirestoreMessageStore(client=db),
             owner_override_store=FirestoreOwnerOverrideStore(client=db),
+            transcript_store=FirestoreTranscriptStore(client=db),
             admin_verifier=admin_verifier,
             agent_public_url=agent_public_url,
             cors_origins=cors_origins or [],

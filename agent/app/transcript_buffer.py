@@ -46,3 +46,9 @@ class TranscriptBuffer:
     def as_text(self) -> str:
         with self._lock:
             return "\n".join(f"{t.role}: {t.text}" for t in self._turns)
+
+    def turns(self) -> list[dict[str, str]]:
+        """Snapshot of the buffer as a list of {"role", "text"} dicts.
+        Preserves deque order; safe to call concurrently."""
+        with self._lock:
+            return [{"role": t.role, "text": t.text} for t in self._turns]

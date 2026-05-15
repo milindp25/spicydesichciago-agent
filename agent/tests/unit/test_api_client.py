@@ -163,6 +163,46 @@ async def test_record_call_summary_posts_summary_route() -> None:
     assert body["summary"] == "Asked about hours and momos; sent order link"
 
 
+async def test_record_call_transcript_posts_turns() -> None:
+    api = FakeApi(json_responder({"ok": True, "turn_count": 2}, status_code=202))
+    c = _client(api)
+    try:
+        await c.record_call_transcript(
+            call_sid="CA1",
+            turns=[
+                {"role": "caller", "text": "hi"},
+                {"role": "agent", "text": "hello"},
+            ],
+        )
+    finally:
+        await c.aclose()
+    req = api.requests[-1]
+    assert req.url.path == "/api/calls/CA1/transcript"
+    assert req.method == "POST"
+    body = json.loads(req.content)
+    assert body["turns"][0] == {"role": "caller", "text": "hi"}
+    assert body["turns"][1] == {"role": "agent", "text": "hello"}
+
+
+async def test_record_call_transcript_swallows_errors() -> None:
+    """Best-effort: a 500 from the API must not raise."""
+    import httpx
+
+    def failing_responder(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"detail": "boom"})
+
+    api = FakeApi(failing_responder)
+    c = _client(api)
+    try:
+        # Must not raise
+        await c.record_call_transcript(
+            call_sid="CA1",
+            turns=[{"role": "caller", "text": "hi"}],
+        )
+    finally:
+        await c.aclose()
+
+
 async def test_lifecycle_methods_swallow_http_errors() -> None:
     """Returns 500 — methods must not raise (best-effort, called on hangup)."""
     import httpx

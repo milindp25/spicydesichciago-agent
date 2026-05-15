@@ -153,6 +153,18 @@ class ApiClient:
         except Exception:
             log.exception("record_call_end failed for %s", call_sid)
 
+    async def record_call_transcript(
+        self, *, call_sid: str, turns: list[dict[str, str]]
+    ) -> None:
+        """Best-effort: persist the transcript turns at hangup. Never raises."""
+        try:
+            await self._client.post(
+                f"/api/calls/{call_sid}/transcript",
+                json={"turns": turns},
+            )
+        except Exception:
+            log.exception("record_call_transcript failed for %s", call_sid)
+
     async def record_call_summary(self, *, call_sid: str, summary: str) -> None:
         """Best-effort: record call summary. Never raises."""
         try:

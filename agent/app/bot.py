@@ -373,6 +373,10 @@ async def run_bot(
                 summary_text = await summary_gen.generate(transcript_buffer.as_text())
                 if summary_text:
                     await api.record_call_summary(call_sid=call_sid, summary=summary_text)
+                # Persist the full transcript for dashboard / QA review.
+                await api.record_call_transcript(
+                    call_sid=call_sid, turns=transcript_buffer.turns()
+                )
 
         await event_buffer.stop()
         await api.aclose()

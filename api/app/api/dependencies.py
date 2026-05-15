@@ -11,6 +11,7 @@ from app.infrastructure.firestore_call_store import FirestoreCallStore
 from app.infrastructure.firestore_caller_store import FirestoreCallerStore
 from app.infrastructure.firestore_message_store import FirestoreMessageStore
 from app.infrastructure.firestore_owner_override_store import FirestoreOwnerOverrideStore
+from app.infrastructure.firestore_transcript_store import FirestoreTranscriptStore
 from app.infrastructure.tenant_registry import TenantRegistry
 from app.infrastructure.twilio_client import TwilioOps
 from app.services.catalog_service import CatalogService
@@ -32,6 +33,7 @@ class AppState:
     caller_store: FirestoreCallerStore
     message_store: FirestoreMessageStore
     owner_override_store: FirestoreOwnerOverrideStore
+    transcript_store: FirestoreTranscriptStore
     admin_verifier: FirebaseAuthVerifier
     agent_public_url: str = ""
     cors_origins: list[str] = field(default_factory=list)

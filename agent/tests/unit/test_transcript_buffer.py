@@ -55,6 +55,26 @@ def test_ignores_empty_strings():
     assert len(buf) == 0
 
 
+def test_turns_returns_ordered_dicts():
+    buf = TranscriptBuffer()
+    buf.add_user("hi")
+    buf.add_assistant("hello")
+    buf.add_user("when do you open?")
+    turns = buf.turns()
+    assert turns == [
+        {"role": "caller", "text": "hi"},
+        {"role": "agent", "text": "hello"},
+        {"role": "caller", "text": "when do you open?"},
+    ]
+    # snapshot is independent — mutating the returned list doesn't affect buffer
+    turns.pop()
+    assert len(buf) == 3
+
+
+def test_turns_empty_for_empty_buffer():
+    assert TranscriptBuffer().turns() == []
+
+
 def test_thread_safe_append():
     """Concurrent appends from Pipecat frame observers must not corrupt
     the deque or interleave fields. Smoke test: 100 quick appends."""

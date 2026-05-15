@@ -48,3 +48,16 @@ async def call_detail(request: Request, call_sid: str) -> dict[str, Any]:
             "payload": dict(ev.payload),
         })
     return {"call": _serialize_call(call_sid, call), "events": events}
+
+
+@router.get("/calls/{call_sid}/transcript")
+async def call_transcript(request: Request, call_sid: str) -> dict[str, Any]:
+    state = get_state(request)
+    transcript = state.transcript_store.get(call_sid)
+    if transcript is None:
+        raise HTTPException(status_code=404, detail="transcript not found")
+    return {
+        "callSid": transcript.call_sid,
+        "storedAt": transcript.stored_at.isoformat(),
+        "turns": [{"role": t.role, "text": t.text} for t in transcript.turns],
+    }
