@@ -20,9 +20,15 @@ async def take_message(request: Request, body: MessageRequest) -> dict[str, Any]
     if tenant is None:
         raise HTTPException(404, "tenant not found")
 
+    try:
+        received = datetime.now().strftime("%-I:%M %p")
+    except ValueError:
+        received = datetime.now().strftime("%I:%M %p").lstrip("0")
+    caller_label = body.caller_name or "unknown caller"
     sms_body = (
-        f"Spicy Desi AI message — {body.caller_name or 'unknown'} "
-        f"({body.callback_number}): {body.reason}"
+        f"Spicy Desi voice agent — message at {received}\n"
+        f"{caller_label} ({body.callback_number}): {body.reason}\n"
+        f"Call back: tel:{body.callback_number}"
     )
     sms_sent = await state.twilio.send_sms(to=tenant.owner_phone, body=sms_body)
 

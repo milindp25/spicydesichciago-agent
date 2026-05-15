@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable
 
 from fastapi.testclient import TestClient
@@ -26,7 +27,13 @@ def test_messages_records_event_and_sends_sms_to_owner(
     assert len(state.twilio.sms_calls) == 2
     owner_msg = state.twilio.sms_calls[0]
     assert owner_msg["to"] == "+15555550199"
-    assert "catering" in owner_msg["body"]
+    owner_body = owner_msg["body"]
+    assert "catering" in owner_body
+    assert "+13125551111" in owner_body
+    assert "tel:+13125551111" in owner_body
+    assert re.search(r"\b\d{1,2}:\d{2}\s*(AM|PM)\b", owner_body), (
+        f"no time-of-day marker in {owner_body!r}"
+    )
 
     caller_msg = state.twilio.sms_calls[1]
     assert caller_msg["to"] == "+13125551111"
