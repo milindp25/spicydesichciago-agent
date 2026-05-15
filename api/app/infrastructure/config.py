@@ -36,6 +36,9 @@ class AppSettings(BaseSettings):
     twilio_from_number: str = Field("", alias="TWILIO_FROM_NUMBER")
     twilio_signing_secret: str = Field("", alias="TWILIO_SIGNING_SECRET")
 
+    firebase_service_account_path: str = Field("", alias="FIREBASE_SERVICE_ACCOUNT_PATH")
+    firebase_project_id: str = Field("spicy-desi-chicago", alias="FIREBASE_PROJECT_ID")
+
     agent_public_url: str = Field("", alias="AGENT_PUBLIC_URL")
 
     cors_origins: str = Field("", alias="CORS_ORIGINS")
