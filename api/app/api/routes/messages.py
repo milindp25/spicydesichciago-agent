@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.dependencies import get_state, require_tools_auth
-from app.domain.call import CallEvent
+from app.domain.call import CallEvent, EventKind
 from app.domain.message import Message
 from app.domain.models import MessageRequest
 
@@ -56,7 +56,7 @@ async def take_message(request: Request, body: MessageRequest) -> dict[str, Any]
         call_sid=body.call_sid,
         event=CallEvent(
             ts=now,
-            kind="messageTaken",
+            kind=EventKind.MESSAGE_TAKEN.value,
             payload={**body.model_dump(), "sms_sent": sms_sent, "message_id": message_id},
         ),
         caller_phone_for_upsert=body.callback_number,

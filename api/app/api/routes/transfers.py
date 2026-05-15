@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.api.dependencies import get_state, require_tools_auth
-from app.domain.call import CallEvent
+from app.domain.call import CallEvent, EventKind
 from app.domain.models import TransferRequest
 from app.services.transfer_decision_service import decide_transfer
 
@@ -35,7 +35,7 @@ async def request_transfer(
         call_sid=body.call_sid,
         event=CallEvent(
             ts=datetime.now(timezone.utc),
-            kind="transferDecided",
+            kind=EventKind.TRANSFER_DECIDED.value,
             payload={
                 "decision": decision.model_dump(),
                 "reason": body.reason,

@@ -20,6 +20,27 @@ class Outcome(StrEnum):
     FAILED = "failed"
 
 
+class EventKind(StrEnum):
+    """Canonical taxonomy of CallEvent.kind values.
+
+    CallEvent.kind is intentionally typed as `str` (not narrowed to this enum)
+    so unknown / legacy kinds from older Firestore data still parse. Emitters
+    should pass `EventKind.X.value` to keep the wire format consistent.
+    """
+
+    CALL_STARTED = "callStarted"
+    CALL_ENDED = "callEnded"
+    CALL_SUMMARY = "callSummary"
+    TRANSFER_DECIDED = "transferDecided"
+    TRANSFER_INITIATED = "transferInitiated"
+    TRANSFER_COMPLETED = "transferCompleted"
+    TRANSFER_FAILED = "transferFailed"
+    MESSAGE_TAKEN = "messageTaken"
+    SMS_LINK_SENT = "smsLinkSent"
+    TOOL_CALLED = "toolCalled"
+    TOOL_ERROR = "toolError"
+
+
 class Call(BaseModel):
     call_sid: str
     started_at: datetime

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_state, require_tools_auth
-from app.domain.call import CallEvent
+from app.domain.call import CallEvent, EventKind
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_tools_auth)])
 
@@ -55,7 +55,7 @@ async def send_link(request: Request, body: SmsLinkRequest) -> dict[str, Any]:
         call_sid=body.call_sid,
         event=CallEvent(
             ts=datetime.now(timezone.utc),
-            kind="smsLinkSent",
+            kind=EventKind.SMS_LINK_SENT.value,
             payload={"to": body.to, "kind": body.kind, "sms_sent": sms_sent, "link": link},
         ),
         caller_phone_for_upsert=body.to or "+0",
