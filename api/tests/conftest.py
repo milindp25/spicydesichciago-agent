@@ -13,6 +13,7 @@ from app.domain.models import OwnerAvailable, Tenant
 from app.infrastructure.cache import TtlCache
 from app.infrastructure.firestore_call_store import FirestoreCallStore
 from app.infrastructure.firestore_caller_store import FirestoreCallerStore
+from app.infrastructure.firestore_daily_stats_store import FirestoreDailyStatsStore
 from app.infrastructure.firestore_message_store import FirestoreMessageStore
 from app.infrastructure.firestore_owner_override_store import FirestoreOwnerOverrideStore
 from app.infrastructure.firestore_transcript_store import FirestoreTranscriptStore
@@ -116,6 +117,7 @@ def client_factory(
             message_store=FirestoreMessageStore(client=db),
             owner_override_store=FirestoreOwnerOverrideStore(client=db),
             transcript_store=FirestoreTranscriptStore(client=db),
+            daily_stats_store=FirestoreDailyStatsStore(client=db),
             admin_verifier=admin_verifier,
             agent_public_url=agent_public_url,
             cors_origins=cors_origins or [],

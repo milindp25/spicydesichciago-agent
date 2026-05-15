@@ -82,6 +82,26 @@ class FirestoreCallStore:
             )
         call_ref.collection(EVENTS_SUBCOLLECTION).add(event.to_firestore())
 
+    def list_in_window(
+        self, *, start_utc: datetime, end_utc: datetime, limit: int = 1000
+    ) -> list[Call]:
+        """Return calls whose startedAt is within [start_utc, end_utc).
+
+        Used by the daily-stats materializer. Day boundaries are expected to
+        be computed by the caller in the target timezone, then converted to
+        UTC for the Firestore query.
+        """
+        query = (
+            self._db.collection(CALLS_COLLECTION)
+            .where(filter=firestore.FieldFilter("startedAt", ">=", start_utc))
+            .where(filter=firestore.FieldFilter("startedAt", "<", end_utc))
+            .limit(limit)
+        )
+        return [
+            Call.from_firestore(call_sid=snap.id, data=snap.to_dict() or {})
+            for snap in query.stream()
+        ]
+
     def list_today_chicago(self, *, limit: int = 200) -> Iterator[tuple[str, Call]]:
         """List calls whose startedAt is within today's date in America/Chicago.
 

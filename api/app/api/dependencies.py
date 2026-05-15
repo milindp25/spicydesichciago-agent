@@ -9,6 +9,7 @@ from fastapi import Header, HTTPException, Request, status
 from app.api.middleware.firebase_auth import AuthError, FirebaseAuthVerifier
 from app.infrastructure.firestore_call_store import FirestoreCallStore
 from app.infrastructure.firestore_caller_store import FirestoreCallerStore
+from app.infrastructure.firestore_daily_stats_store import FirestoreDailyStatsStore
 from app.infrastructure.firestore_message_store import FirestoreMessageStore
 from app.infrastructure.firestore_owner_override_store import FirestoreOwnerOverrideStore
 from app.infrastructure.firestore_transcript_store import FirestoreTranscriptStore
@@ -34,6 +35,7 @@ class AppState:
     message_store: FirestoreMessageStore
     owner_override_store: FirestoreOwnerOverrideStore
     transcript_store: FirestoreTranscriptStore
+    daily_stats_store: FirestoreDailyStatsStore
     admin_verifier: FirebaseAuthVerifier
     agent_public_url: str = ""
     cors_origins: list[str] = field(default_factory=list)
