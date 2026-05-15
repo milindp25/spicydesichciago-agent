@@ -16,6 +16,7 @@ from typing import Any
 
 from app.config import AgentSettings
 from app.intents import OwnerShortcut
+from app.outcome_tracker import OutcomeTracker
 from app.summary import SummaryGenerator
 from app.tools.api_client import ApiClient
 from app.tools.definitions import TOOL_DEFINITIONS
@@ -169,6 +170,7 @@ async def run_bot(
     )
 
     transcript_buffer = TranscriptBuffer()
+    outcome_tracker = OutcomeTracker()
 
     from pathlib import Path
 
@@ -241,6 +243,10 @@ async def run_bot(
                 payload = json.loads(result_str)
             except Exception:
                 payload = {"result": result_str}
+
+        outcome_tracker.record_tool(
+            params.function_name, success="error" not in payload
+        )
 
         await params.result_callback(payload)
 
@@ -349,12 +355,13 @@ async def run_bot(
         if started_at is not None:
             ended_at = datetime.now(timezone.utc)
             duration_ms = int((ended_at - started_at).total_seconds() * 1000)
-            # Outcome detection is rough on this pass; defaults to "resolved".
-            # Plan 3 refines this by tracking the last significant event.
+            # Outcome derived from the last significant tool call (see
+            # OutcomeTracker). Defaults to "resolved" when no significant
+            # tool fired.
             await api.record_call_end(
                 call_sid=call_sid,
                 ended_at=ended_at,
-                outcome="resolved",
+                outcome=outcome_tracker.final_outcome(),
                 duration_ms=duration_ms,
                 caller_phone=from_phone or "+0",
                 from_number="",
