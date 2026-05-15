@@ -165,3 +165,33 @@ def test_iter_events_orders_by_ts(store):
 
     kinds = [e.kind for e in store.iter_events("CA1")]
     assert kinds == ["a", "b"]
+
+
+def test_list_today_chicago_returns_todays_calls_only(store):
+    """Seed three calls: yesterday, today-early, today-late.
+    Expect only today's two, newest first.
+    """
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    chi = ZoneInfo("America/Chicago")
+    today_chi = datetime.now(chi).replace(hour=9, minute=0, second=0, microsecond=0)
+    yesterday_chi = today_chi - timedelta(days=1)
+    today_later_chi = today_chi + timedelta(hours=5)
+
+    for sid, ts in (
+        ("CA-yesterday", yesterday_chi),
+        ("CA-today-early", today_chi),
+        ("CA-today-late", today_later_chi),
+    ):
+        store.record_call_start(Call(
+            call_sid=sid,
+            started_at=ts,
+            caller_phone="+15551234567",
+            from_number="+15559998888",
+        ))
+
+    todays = list(store.list_today_chicago(limit=50))
+    sids = [s for s, _ in todays]
+    assert "CA-yesterday" not in sids
+    assert sids == ["CA-today-late", "CA-today-early"]

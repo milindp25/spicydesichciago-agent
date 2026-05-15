@@ -82,6 +82,32 @@ class FirestoreCallStore:
             )
         call_ref.collection(EVENTS_SUBCOLLECTION).add(event.to_firestore())
 
+    def list_today_chicago(self, *, limit: int = 200) -> Iterator[tuple[str, Call]]:
+        """List calls whose startedAt is within today's date in America/Chicago.
+
+        Computes the day boundary in Chicago time and queries Firestore on
+        a UTC range. Yields (call_sid, Call) tuples ordered newest first.
+        """
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        chi = ZoneInfo("America/Chicago")
+        now_chi = datetime.now(chi)
+        start_chi = now_chi.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_chi = start_chi + timedelta(days=1)
+        start_utc = start_chi.astimezone(ZoneInfo("UTC"))
+        end_utc = end_chi.astimezone(ZoneInfo("UTC"))
+
+        query = (
+            self._db.collection(CALLS_COLLECTION)
+            .where(filter=firestore.FieldFilter("startedAt", ">=", start_utc))
+            .where(filter=firestore.FieldFilter("startedAt", "<", end_utc))
+            .order_by("startedAt", direction=firestore.Query.DESCENDING)
+            .limit(limit)
+        )
+        for snap in query.stream():
+            yield snap.id, Call.from_firestore(call_sid=snap.id, data=snap.to_dict() or {})
+
     def iter_events(self, call_sid: str) -> Iterator[CallEvent]:
         for snap in (
             self._call_ref(call_sid)

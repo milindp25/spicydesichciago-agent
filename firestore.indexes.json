@@ -7,6 +7,13 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "takenAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "calls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
