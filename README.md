@@ -59,8 +59,8 @@ The agent runs the same way from `agent/` on port 8090.
 ## Tests
 
 ```bash
-(cd api   && .venv/bin/pytest tests/ -q)   # 75 passed
-(cd agent && .venv/bin/pytest tests/ -q)   # 66 passed
+(cd api   && .venv/bin/pytest tests/ -q)   # 145 passed (on feature/dashboard-api-auth)
+(cd agent && .venv/bin/pytest tests/ -q)   # 97 passed (on feature/voice-fallbacks-retry)
 ```
 
 All hermetic — no live Square / Twilio / Groq calls.
