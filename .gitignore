@@ -68,3 +68,12 @@ build/
 # Misc
 .cache/
 
+
+# Firebase emulator artifacts
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+firebase-export-*/
+.firebase/
+# Service account JSON (never commit even if accidentally placed in repo)
+*firebase-adminsdk*.json
