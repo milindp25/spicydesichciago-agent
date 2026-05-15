@@ -40,3 +40,25 @@ def test_rejects_invalid_env_value(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_env(monkeypatch, BASE_ENV | {"SQUARE_ENVIRONMENT": "moon"})
     with pytest.raises(ValidationError):
         AppSettings()
+
+
+def test_callback_link_settings_defaults_and_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_env(monkeypatch, BASE_ENV)
+    s = AppSettings()
+    assert s.callback_link_signing_secret == ""
+    assert s.callback_link_ttl_seconds == 7 * 24 * 3600
+    assert s.callback_public_url == ""
+
+    _set_env(
+        monkeypatch,
+        BASE_ENV
+        | {
+            "CALLBACK_LINK_SIGNING_SECRET": "topsecret",
+            "CALLBACK_LINK_TTL_SECONDS": "3600",
+            "CALLBACK_PUBLIC_URL": "https://api.spicydesichicago.com",
+        },
+    )
+    s = AppSettings()
+    assert s.callback_link_signing_secret == "topsecret"
+    assert s.callback_link_ttl_seconds == 3600
+    assert s.callback_public_url == "https://api.spicydesichicago.com"

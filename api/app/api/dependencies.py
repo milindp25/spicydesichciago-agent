@@ -38,6 +38,9 @@ class AppState:
     daily_stats_store: FirestoreDailyStatsStore
     admin_verifier: FirebaseAuthVerifier
     agent_public_url: str = ""
+    callback_token_secret: str = ""
+    callback_token_ttl: int = 7 * 24 * 3600
+    callback_public_url: str = ""
     cors_origins: list[str] = field(default_factory=list)
 
 

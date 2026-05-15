@@ -42,6 +42,10 @@ class AppSettings(BaseSettings):
 
     agent_public_url: str = Field("", alias="AGENT_PUBLIC_URL")
 
+    callback_link_signing_secret: str = Field("", alias="CALLBACK_LINK_SIGNING_SECRET")
+    callback_link_ttl_seconds: int = Field(7 * 24 * 3600, alias="CALLBACK_LINK_TTL_SECONDS")
+    callback_public_url: str = Field("", alias="CALLBACK_PUBLIC_URL")
+
     cors_origins: str = Field("", alias="CORS_ORIGINS")
 
     @property

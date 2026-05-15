@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 class TwilioOps(Protocol):
     async def send_sms(self, *, to: str, body: str) -> bool: ...
     async def redirect_call(self, *, call_sid: str, twiml_url: str) -> bool: ...
+    async def create_call(self, *, to: str, from_: str, url: str) -> str | None: ...
 
 
 class RealTwilioClient:
@@ -42,6 +43,17 @@ class RealTwilioClient:
             log.exception("twilio redirect_call failed", extra={"call_sid": call_sid})
             return False
 
+    async def create_call(self, *, to: str, from_: str, url: str) -> str | None:
+        if self._client is None:
+            log.warning("twilio not configured; skipping create_call", extra={"to": to})
+            return None
+        try:
+            call = self._client.calls.create(to=to, from_=from_, url=url, method="POST")
+            return getattr(call, "sid", None)
+        except Exception:
+            log.exception("twilio create_call failed", extra={"to": to})
+            return None
+
 
 class NoopTwilioClient:
     """Used in dev/test when Twilio creds aren't set."""
@@ -51,3 +63,6 @@ class NoopTwilioClient:
 
     async def redirect_call(self, *, call_sid: str, twiml_url: str) -> bool:
         return False
+
+    async def create_call(self, *, to: str, from_: str, url: str) -> str | None:
+        return None

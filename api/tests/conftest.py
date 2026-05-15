@@ -32,6 +32,8 @@ class FakeTwilioClient:
     def __init__(self) -> None:
         self.sms_calls: list[dict[str, str]] = []
         self.redirects: list[dict[str, str]] = []
+        self.created_calls: list[dict[str, str]] = []
+        self.create_call_return: str | None = "CAfake"
 
     async def send_sms(self, *, to: str, body: str) -> bool:
         self.sms_calls.append({"to": to, "body": body})
@@ -40,6 +42,10 @@ class FakeTwilioClient:
     async def redirect_call(self, *, call_sid: str, twiml_url: str) -> bool:
         self.redirects.append({"call_sid": call_sid, "twiml_url": twiml_url})
         return True
+
+    async def create_call(self, *, to: str, from_: str, url: str) -> str | None:
+        self.created_calls.append({"to": to, "from_": from_, "url": url})
+        return self.create_call_return
 
 
 def _build_tenant() -> Tenant:
@@ -81,6 +87,9 @@ def client_factory(
         cors_origins: list[str] | None = None,
         agent_public_url: str = "https://agent.example.com",
         firestore_db: Any | None = None,
+        callback_token_secret: str = "",
+        callback_token_ttl: int = 7 * 24 * 3600,
+        callback_public_url: str = "https://api.example.com",
     ) -> tuple[TestClient, AppState]:
         # The fixture-level firestore_db is always available (emulator-backed);
         # the kwarg is kept for backward compatibility with tests that pass it
@@ -120,6 +129,9 @@ def client_factory(
             daily_stats_store=FirestoreDailyStatsStore(client=db),
             admin_verifier=admin_verifier,
             agent_public_url=agent_public_url,
+            callback_token_secret=callback_token_secret,
+            callback_token_ttl=callback_token_ttl,
+            callback_public_url=callback_public_url,
             cors_origins=cors_origins or [],
         )
         return TestClient(build_app(state)), state

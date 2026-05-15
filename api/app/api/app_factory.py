@@ -11,6 +11,7 @@ from app.api.dependencies import AppState
 from app.api.middleware.rate_limit import build_limiter
 from app.api.routes import (
     address,
+    callback,
     callers,
     calls,
     events,
@@ -72,6 +73,7 @@ def build_app(deps: AppState) -> FastAPI:
     app.include_router(sms.router)
     app.include_router(callers.router)
     app.include_router(calls.router)
+    app.include_router(callback.router)
     app.include_router(webhooks_square.router)
     app.include_router(admin_messages.router)
     app.include_router(admin_calls.router)

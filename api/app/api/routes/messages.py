@@ -9,6 +9,7 @@ from app.api.dependencies import get_state, require_tools_auth
 from app.domain.call import CallEvent, EventKind
 from app.domain.message import Message
 from app.domain.models import MessageRequest
+from app.services.callback_tokens import encode as encode_callback_token
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_tools_auth)])
 
@@ -25,11 +26,44 @@ async def take_message(request: Request, body: MessageRequest) -> dict[str, Any]
     except ValueError:
         received = datetime.now().strftime("%I:%M %p").lstrip("0")
     caller_label = body.caller_name or "unknown caller"
-    sms_body = (
-        f"Spicy Desi voice agent — message at {received}\n"
-        f"{caller_label} ({body.callback_number}): {body.reason}\n"
-        f"Call back: tel:{body.callback_number}"
+
+    now = datetime.now(timezone.utc)
+
+    # 1) Primary record in /messages — create first so we can embed the id in the callback link.
+    msg = Message(
+        call_sid=body.call_sid,
+        caller_phone=body.callback_number,
+        caller_name=body.caller_name,
+        reason=body.reason,
+        taken_at=now,
     )
+    message_id = state.message_store.create(msg)
+
+    # Build owner SMS body. If the callback-link feature is enabled, embed a signed
+    # one-tap link instead of the raw caller phone number; otherwise fall back to
+    # the legacy `tel:` line.
+    if state.callback_token_secret and state.callback_public_url:
+        token = encode_callback_token(
+            {
+                "message_id": message_id,
+                "caller_phone": body.callback_number,
+                "owner_phone": tenant.owner_phone,
+            },
+            secret=state.callback_token_secret,
+            ttl_seconds=state.callback_token_ttl,
+        )
+        callback_url = f"{state.callback_public_url.rstrip('/')}/api/callback/{token}"
+        sms_body = (
+            f"Spicy Desi voice agent — message at {received}\n"
+            f"{caller_label} ({body.callback_number}): {body.reason}\n"
+            f"Tap to call back: {callback_url}"
+        )
+    else:
+        sms_body = (
+            f"Spicy Desi voice agent — message at {received}\n"
+            f"{caller_label} ({body.callback_number}): {body.reason}\n"
+            f"Call back: tel:{body.callback_number}"
+        )
     sms_sent = await state.twilio.send_sms(to=tenant.owner_phone, body=sms_body)
 
     if tenant.sms_confirmation_to_caller and body.callback_number:
@@ -47,18 +81,6 @@ async def take_message(request: Request, body: MessageRequest) -> dict[str, Any]
             )
         confirmation = "\n".join(lines)
         await state.twilio.send_sms(to=body.callback_number, body=confirmation)
-
-    now = datetime.now(timezone.utc)
-
-    # 1) Primary record in /messages
-    msg = Message(
-        call_sid=body.call_sid,
-        caller_phone=body.callback_number,
-        caller_name=body.caller_name,
-        reason=body.reason,
-        taken_at=now,
-    )
-    message_id = state.message_store.create(msg)
 
     # 2) Mirror as a call event under /calls/{sid}/events
     state.call_store.append_event(
