@@ -1,0 +1,25 @@
+// ⚠️ DO NOT DEPLOY THIS FILE TO PRODUCTION ⚠️
+//
+// This rules file exists ONLY for the local Firestore emulator. Deploying
+// it via `firebase deploy --only firestore:rules` would lock out the
+// existing dashboard at https://spicydesichicago.com/admin/.
+//
+// Production rules are owned by the dashboard team. Coordination with them
+// happens in Plan 4 (dashboard auth). Until then, never touch production
+// rules from this repo.
+//
+// The Admin SDK used by api/app bypasses rules entirely, so production
+// reads/writes from our backend service work regardless of rules. Tests
+// run against the emulator with the rules below, which is a default-deny
+// — meaningless to our Admin-SDK-using tests but matches what production
+// would expect once Plan 4 lands.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny everything. Real rules land in Plan 4.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
