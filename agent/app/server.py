@@ -9,6 +9,7 @@ from fastapi.responses import PlainTextResponse
 
 from app.bot import run_bot
 from app.config import AgentSettings
+from app.escalation import decode_chain, encode_chain, pop_head
 from app.security.twilio_signature import TwilioSignatureVerifier
 
 log = logging.getLogger(__name__)
@@ -78,34 +79,91 @@ def build_app(settings: AgentSettings) -> FastAPI:
         )
         return PlainTextResponse(twiml, media_type="application/xml")
 
+    def _take_message_twiml(host: str, say: str) -> str:
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            "<Response>\n"
+            f"  <Say>{say}</Say>\n"
+            "  <Connect>\n"
+            f'    <Stream url="wss://{host}/twilio/stream"/>\n'
+            "  </Connect>\n"
+            "</Response>"
+        )
+
+    def _hangup_twiml() -> str:
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            "<Response><Hangup/></Response>"
+        )
+
+    def _dial_next_twiml(head: dict, tail_encoded: str, say: str | None) -> str:
+        """Build a TwiML <Dial> that hands off to escalation-fallback with the
+        remaining chain encoded in the action URL.
+        """
+        phone = quoteattr(str(head["phone"])).strip('"')
+        timeout = int(head.get("timeout_seconds", 25))
+        # tail_encoded is already URL-safe base64 with no padding -> no escaping needed.
+        action = f"/twilio/escalation-fallback?chain={tail_encoded}"
+        say_block = f"  <Say>{say}</Say>\n" if say else ""
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            "<Response>\n"
+            f"{say_block}"
+            f'  <Dial timeout="{timeout}" action={quoteattr(action)}>{phone}</Dial>\n'
+            "</Response>"
+        )
+
     @app.post("/twilio/dial-owner")
-    async def dial_owner(request: Request, to: str = Query(...)) -> PlainTextResponse:
+    async def dial_owner(
+        request: Request,
+        to: str = Query(...),
+        chain: str = Query(""),
+    ) -> PlainTextResponse:
         await _verify_twilio(request)
+        # Forward the escalation chain through the action URL so the fallback
+        # can pop and dial the next contact on failure. Empty/absent chain
+        # is fine — fallback degrades to today's take-message behavior.
+        action_qs = f"?chain={chain}" if chain else ""
+        action = f"/twilio/dial-owner-fallback{action_qs}"
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             "<Response>\n"
-            f'  <Dial timeout="25" action="/twilio/dial-owner-fallback">{to}</Dial>\n'
+            f'  <Dial timeout="25" action={quoteattr(action)}>{to}</Dial>\n'
             "</Response>"
         )
         return PlainTextResponse(twiml, media_type="application/xml")
 
     @app.post("/twilio/dial-owner-fallback")
-    async def dial_owner_fallback(request: Request) -> PlainTextResponse:
+    async def dial_owner_fallback(
+        request: Request,
+        chain: str = Query(""),
+    ) -> PlainTextResponse:
         await _verify_twilio(request)
         form = await request.form()
         dial_call_status = str(form.get("DialCallStatus") or "").lower()
         host = request.headers.get("host", "")
-        log.info("dial-owner-fallback fired", extra={"dial_call_status": dial_call_status})
+        log.info(
+            "dial-owner-fallback fired",
+            extra={"dial_call_status": dial_call_status, "chain_present": bool(chain)},
+        )
 
         # Caller and owner finished a normal conversation -> just hang up.
         if dial_call_status == "completed":
-            twiml = (
-                '<?xml version="1.0" encoding="UTF-8"?>\n'
-                "<Response><Hangup/></Response>"
-            )
-            return PlainTextResponse(twiml, media_type="application/xml")
+            return PlainTextResponse(_hangup_twiml(), media_type="application/xml")
 
-        # Phrasing depends on why the dial failed.
+        # Try the next contact in the chain before taking a message.
+        contacts = decode_chain(chain)
+        head, tail = pop_head(contacts)
+        if head is not None:
+            label = head.get("label") or "backup"
+            say = f"Owner didn't pick up - trying our {label} now."
+            tail_encoded = encode_chain(tail)
+            return PlainTextResponse(
+                _dial_next_twiml(head, tail_encoded, say),
+                media_type="application/xml",
+            )
+
+        # Chain exhausted (or empty) — fall through to take-message.
         if dial_call_status in ("failed", "canceled"):
             say = (
                 "Hmm, looks like that number's not reachable. "
@@ -116,16 +174,50 @@ def build_app(settings: AgentSettings) -> FastAPI:
         else:  # no-answer or anything else
             say = "Owner didn't pick up. Let me take a message and they'll ring you back."
 
-        twiml = (
-            '<?xml version="1.0" encoding="UTF-8"?>\n'
-            "<Response>\n"
-            f"  <Say>{say}</Say>\n"
-            "  <Connect>\n"
-            f'    <Stream url="wss://{host}/twilio/stream"/>\n'
-            "  </Connect>\n"
-            "</Response>"
+        return PlainTextResponse(_take_message_twiml(host, say), media_type="application/xml")
+
+    @app.post("/twilio/escalation-fallback")
+    async def escalation_fallback(
+        request: Request,
+        chain: str = Query(""),
+    ) -> PlainTextResponse:
+        await _verify_twilio(request)
+        form = await request.form()
+        dial_call_status = str(form.get("DialCallStatus") or "").lower()
+        host = request.headers.get("host", "")
+        log.info(
+            "escalation-fallback fired",
+            extra={"dial_call_status": dial_call_status, "chain_present": bool(chain)},
         )
-        return PlainTextResponse(twiml, media_type="application/xml")
+
+        # Caller and the escalation contact finished a normal conversation.
+        if dial_call_status == "completed":
+            return PlainTextResponse(_hangup_twiml(), media_type="application/xml")
+
+        # Try the next contact in the remaining chain.
+        contacts = decode_chain(chain)
+        head, tail = pop_head(contacts)
+        if head is not None:
+            label = head.get("label") or "backup"
+            say = f"Still trying — let me ring our {label}."
+            tail_encoded = encode_chain(tail)
+            return PlainTextResponse(
+                _dial_next_twiml(head, tail_encoded, say),
+                media_type="application/xml",
+            )
+
+        # Chain exhausted — fall through to take-message.
+        if dial_call_status in ("failed", "canceled"):
+            say = (
+                "Hmm, that didn't go through either. "
+                "Let me grab a message for the owner instead."
+            )
+        elif dial_call_status == "busy":
+            say = "They're on another call too. Let me take a message and they'll ring you back."
+        else:
+            say = "No answer there either. Let me take a message and they'll ring you back."
+
+        return PlainTextResponse(_take_message_twiml(host, say), media_type="application/xml")
 
     @app.websocket("/twilio/stream")
     async def twilio_stream(ws: WebSocket) -> None:

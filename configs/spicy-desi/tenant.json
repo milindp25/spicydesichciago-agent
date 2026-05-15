@@ -19,5 +19,6 @@
   "sms_confirmation_to_caller": true,
   "location_overrides": {},
   "order_url": "${ORDER_URL}",
-  "owner_phone_is_temporary": true
+  "owner_phone_is_temporary": true,
+  "escalation": []
 }

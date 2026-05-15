@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.domain.models import MenuItem, OwnerAvailable, Tenant
+from app.domain.models import EscalationContact, MenuItem, OwnerAvailable, Tenant
 
 _ENV_REF = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 
@@ -49,6 +49,8 @@ def load_tenants(configs_dir: str) -> TenantRegistry:
         specials_file = entry / "specials.json"
         specials_raw = json.loads(specials_file.read_text()) if specials_file.exists() else []
         specials = [MenuItem.model_validate(item) for item in specials_raw]
+        escalation_raw = tj.get("escalation", []) or []
+        escalation = [EscalationContact.model_validate(item) for item in escalation_raw]
 
         tenants[tj["slug"]] = Tenant(
             slug=tj["slug"],
@@ -64,6 +66,7 @@ def load_tenants(configs_dir: str) -> TenantRegistry:
             specials=specials,
             order_url=tj.get("order_url", ""),
             owner_phone_is_temporary=tj.get("owner_phone_is_temporary", False),
+            escalation=escalation,
         )
     return TenantRegistry(tenants=tenants, by_twilio_number=index["tenants_by_twilio_number"])
 

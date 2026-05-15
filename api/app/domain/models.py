@@ -97,6 +97,21 @@ class OwnerAvailable(BaseModel):
     weekly: dict[str, tuple[str, str]]
 
 
+class EscalationContact(BaseModel):
+    """One step in the escalation chain after the owner.
+
+    `phone` is the E.164 number to <Dial>. `timeout_seconds` mirrors the
+    Twilio Dial timeout (how long to ring before falling through to the
+    next step). `label` is a short, human-readable name ("manager",
+    "kitchen") used in TwiML <Say> prompts so the caller knows who's
+    being tried next.
+    """
+
+    phone: str
+    timeout_seconds: int = 25
+    label: str = ""
+
+
 class Tenant(BaseModel):
     slug: str
     name: str
@@ -113,3 +128,6 @@ class Tenant(BaseModel):
     # Marks owner_phone as a placeholder for testing — use to flag deploys
     # where the owner's real number must be set before going live.
     owner_phone_is_temporary: bool = False
+    # Ordered backup contacts tried after owner's <Dial> fails, before the
+    # take-message fallback. Empty list (default) preserves today's behavior.
+    escalation: list[EscalationContact] = Field(default_factory=list)

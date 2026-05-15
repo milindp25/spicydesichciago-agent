@@ -91,3 +91,46 @@ def test_env_var_substitution_in_tenant_json(
     t = reg.tenants["spicy-desi"]
     assert t.owner_phone == "+13125550000"
     assert t.order_url == "https://example.com/order"
+
+
+def test_load_tenants_parses_escalation_chain(tmp_path: Path) -> None:
+    (tmp_path / "index.json").write_text(
+        json.dumps({"tenants_by_twilio_number": {"+15555550100": "spicy-desi"}})
+    )
+    sd = tmp_path / "spicy-desi"
+    sd.mkdir()
+    (sd / "tenant.json").write_text(
+        json.dumps(
+            {
+                "slug": "spicy-desi",
+                "name": "Spicy Desi",
+                "twilio_number": "+15555550100",
+                "owner_phone": "+15555550199",
+                "owner_available": {
+                    "tz": "America/Chicago",
+                    "weekly": {"mon": ["11:00", "21:30"]},
+                },
+                "languages": ["en"],
+                "sms_confirmation_to_caller": True,
+                "location_overrides": {},
+                "escalation": [
+                    {"phone": "+13125550100", "label": "manager"}
+                ],
+            }
+        )
+    )
+    (sd / "faq.md").write_text("")
+    (sd / "location-notes.md").write_text("")
+
+    reg = load_tenants(str(tmp_path))
+    t = reg.tenants["spicy-desi"]
+    assert len(t.escalation) == 1
+    assert t.escalation[0].phone == "+13125550100"
+    assert t.escalation[0].label == "manager"
+    # default applies when not specified
+    assert t.escalation[0].timeout_seconds == 25
+
+
+def test_load_tenants_defaults_empty_escalation(configs_dir: Path) -> None:
+    reg = load_tenants(str(configs_dir))
+    assert reg.tenants["spicy-desi"].escalation == []
