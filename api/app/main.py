@@ -11,7 +11,6 @@ from app.api.app_factory import build_app  # noqa: E402
 from app.api.dependencies import AppState  # noqa: E402
 from app.infrastructure.cache import TtlCache  # noqa: E402
 from app.infrastructure.config import AppSettings  # noqa: E402
-from app.infrastructure.event_log import JsonlEventLog  # noqa: E402
 from app.infrastructure.firestore_call_store import FirestoreCallStore  # noqa: E402
 from app.infrastructure.firestore_caller_store import FirestoreCallerStore  # noqa: E402
 from app.infrastructure.firestore_client import FirestoreClient  # noqa: E402
@@ -82,7 +81,6 @@ def _build() -> FastAPI:
         locations_service=locations_service,
         catalog_service=catalog_service,
         pickup_service=pickup_service,
-        event_log=JsonlEventLog(settings.event_log_path),
         square_webhook_signature_key=settings.square_webhook_signature_key,
         square_webhook_url=settings.square_webhook_url,
         twilio=twilio,

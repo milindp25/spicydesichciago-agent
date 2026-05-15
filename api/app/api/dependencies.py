@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 
 from fastapi import Header, HTTPException, Request, status
 
-from app.infrastructure.event_log import JsonlEventLog
 from app.infrastructure.firestore_call_store import FirestoreCallStore
 from app.infrastructure.firestore_caller_store import FirestoreCallerStore
 from app.infrastructure.firestore_message_store import FirestoreMessageStore
@@ -24,16 +23,15 @@ class AppState:
     locations_service: LocationsService
     catalog_service: CatalogService
     pickup_service: PickupService
-    event_log: JsonlEventLog
     square_webhook_signature_key: str
     square_webhook_url: str
     twilio: TwilioOps
+    call_store: FirestoreCallStore
+    caller_store: FirestoreCallerStore
+    message_store: FirestoreMessageStore
+    owner_override_store: FirestoreOwnerOverrideStore
     agent_public_url: str = ""
     cors_origins: list[str] = field(default_factory=list)
-    call_store: FirestoreCallStore | None = None
-    caller_store: FirestoreCallerStore | None = None
-    message_store: FirestoreMessageStore | None = None
-    owner_override_store: FirestoreOwnerOverrideStore | None = None
 
 
 def get_state(request: Request) -> AppState:

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from app.api.dependencies import get_state, require_tools_auth
 from app.domain.call import CallEvent
 from app.domain.message import Message
-from app.domain.models import EventRecord, MessageRequest
+from app.domain.models import MessageRequest
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_tools_auth)])
 
@@ -34,39 +34,27 @@ async def take_message(request: Request, body: MessageRequest) -> dict[str, Any]
         await state.twilio.send_sms(to=body.callback_number, body=confirmation)
 
     now = datetime.now(timezone.utc)
-    message_id: str | None = None
 
-    if state.message_store is not None:
-        # 1) Primary record in /messages
-        msg = Message(
-            call_sid=body.call_sid,
-            caller_phone=body.callback_number,
-            caller_name=body.caller_name,
-            reason=body.reason,
-            taken_at=now,
-        )
-        message_id = state.message_store.create(msg)
+    # 1) Primary record in /messages
+    msg = Message(
+        call_sid=body.call_sid,
+        caller_phone=body.callback_number,
+        caller_name=body.caller_name,
+        reason=body.reason,
+        taken_at=now,
+    )
+    message_id = state.message_store.create(msg)
 
-    if state.call_store is not None:
-        # 2) Mirror as a call event under /calls/{sid}/events
-        state.call_store.append_event(
-            call_sid=body.call_sid,
-            event=CallEvent(
-                ts=now,
-                kind="messageTaken",
-                payload={**body.model_dump(), "sms_sent": sms_sent, "message_id": message_id},
-            ),
-            caller_phone_for_upsert=body.callback_number,
-            from_number_for_upsert=tenant.twilio_number,
-        )
-
-    # Legacy JSONL event log (removed in Task 5.7 once readers migrate).
-    await state.event_log.append(
-        EventRecord(
-            call_sid=body.call_sid,
-            kind="message_taken",
+    # 2) Mirror as a call event under /calls/{sid}/events
+    state.call_store.append_event(
+        call_sid=body.call_sid,
+        event=CallEvent(
+            ts=now,
+            kind="messageTaken",
             payload={**body.model_dump(), "sms_sent": sms_sent, "message_id": message_id},
-        )
+        ),
+        caller_phone_for_upsert=body.callback_number,
+        from_number_for_upsert=tenant.twilio_number,
     )
 
     return {"ok": True, "sms_sent": sms_sent, "message_id": message_id}

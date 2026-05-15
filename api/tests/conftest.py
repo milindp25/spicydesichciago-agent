@@ -11,7 +11,6 @@ from app.api.app_factory import build_app
 from app.api.dependencies import AppState
 from app.domain.models import OwnerAvailable, Tenant
 from app.infrastructure.cache import TtlCache
-from app.infrastructure.event_log import JsonlEventLog
 from app.infrastructure.firestore_call_store import FirestoreCallStore
 from app.infrastructure.firestore_caller_store import FirestoreCallerStore
 from app.infrastructure.firestore_message_store import FirestoreMessageStore
@@ -70,6 +69,7 @@ def auth_headers() -> dict[str, str]:
 @pytest.fixture
 def client_factory(
     tmp_path: Path,
+    firestore_db: Any,
 ) -> Callable[..., tuple[TestClient, AppState]]:
     def _build(
         locations: list[dict[str, Any]] | None = None,
@@ -79,6 +79,10 @@ def client_factory(
         agent_public_url: str = "https://agent.example.com",
         firestore_db: Any | None = None,
     ) -> tuple[TestClient, AppState]:
+        # The fixture-level firestore_db is always available (emulator-backed);
+        # the kwarg is kept for backward compatibility with tests that pass it
+        # explicitly, but defaults to the fixture-injected client.
+        db = firestore_db if firestore_db is not None else _build.__firestore_db__  # type: ignore[attr-defined]
         tenant = _build_tenant()
         registry = TenantRegistry(
             tenants={tenant.slug: tenant},
@@ -90,41 +94,28 @@ def client_factory(
             cache=TtlCache(60),
             specials_category_id="SPECIALS",
         )
-        log = JsonlEventLog(str(tmp_path / "events.jsonl"))
         pickup_store = PickupStateStore(str(tmp_path / "pickup-state.json"))
         pickup_svc = PickupService(store=pickup_store, locations=loc_svc)
         twilio = FakeTwilioClient()
-        call_store = FirestoreCallStore(client=firestore_db) if firestore_db is not None else None
-        caller_store = (
-            FirestoreCallerStore(client=firestore_db) if firestore_db is not None else None
-        )
-        message_store = (
-            FirestoreMessageStore(client=firestore_db) if firestore_db is not None else None
-        )
-        owner_override_store = (
-            FirestoreOwnerOverrideStore(client=firestore_db)
-            if firestore_db is not None
-            else None
-        )
         state = AppState(
             tools_shared_secret=SHARED_SECRET,
             tenants=registry,
             locations_service=loc_svc,
             catalog_service=cat_svc,
             pickup_service=pickup_svc,
-            event_log=log,
             square_webhook_signature_key="key",
             square_webhook_url="https://example.com/api/webhooks/square",
             twilio=twilio,
+            call_store=FirestoreCallStore(client=db),
+            caller_store=FirestoreCallerStore(client=db),
+            message_store=FirestoreMessageStore(client=db),
+            owner_override_store=FirestoreOwnerOverrideStore(client=db),
             agent_public_url=agent_public_url,
             cors_origins=cors_origins or [],
-            call_store=call_store,
-            caller_store=caller_store,
-            message_store=message_store,
-            owner_override_store=owner_override_store,
         )
         return TestClient(build_app(state)), state
 
+    _build.__firestore_db__ = firestore_db  # type: ignore[attr-defined]
     return _build
 
 
