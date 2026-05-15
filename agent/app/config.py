@@ -30,3 +30,10 @@ class AgentSettings(BaseSettings):
     cartesia_voice_id: str = Field(..., alias="CARTESIA_VOICE_ID", min_length=1)
 
     twilio_auth_token: str = Field("", alias="TWILIO_AUTH_TOKEN")
+
+    # VAD timings (seconds). stop_secs is how long to wait after the caller
+    # stops speaking before considering their turn done; start_secs is the
+    # minimum speech duration to trigger a start-of-speech event. Tuneable
+    # via env without redeploys — useful for A/B testing barge-in feel.
+    vad_stop_secs: float = Field(0.6, alias="AGENT_VAD_STOP_SECS")
+    vad_start_secs: float = Field(0.2, alias="AGENT_VAD_START_SECS")

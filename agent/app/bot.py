@@ -29,6 +29,12 @@ log = logging.getLogger(__name__)
 # caller it's connecting them and triggers a transfer to the owner.
 MAX_CALL_SECONDS = 90
 
+# VAD (Voice Activity Detection) tuning. stop_secs is how long the analyzer
+# waits after speech stops before emitting an end-of-utterance — too low and
+# callers get cut off mid-sentence; too high and the bot feels sluggish.
+VAD_STOP_SECS = 0.6  # was 0.4 — gives callers room to breathe mid-sentence
+VAD_START_SECS = 0.2
+
 
 def load_system_prompt() -> str:
     return (Path(__file__).parent / "prompts" / "system.md").read_text()
@@ -172,7 +178,10 @@ async def run_bot(
             audio_out_enabled=True,
             add_wav_header=False,
             vad_analyzer=SileroVADAnalyzer(
-                params=VADParams(stop_secs=0.4, start_secs=0.2)
+                params=VADParams(
+                    stop_secs=settings.vad_stop_secs,
+                    start_secs=settings.vad_start_secs,
+                )
             ),
             serializer=serializer,
         ),
