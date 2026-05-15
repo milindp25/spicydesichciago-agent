@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 from fastapi import Header, HTTPException, Request, status
 
 from app.infrastructure.event_log import JsonlEventLog
+from app.infrastructure.firestore_call_store import FirestoreCallStore
+from app.infrastructure.firestore_caller_store import FirestoreCallerStore
+from app.infrastructure.firestore_message_store import FirestoreMessageStore
+from app.infrastructure.firestore_owner_override_store import FirestoreOwnerOverrideStore
 from app.infrastructure.tenant_registry import TenantRegistry
 from app.infrastructure.twilio_client import TwilioOps
 from app.services.catalog_service import CatalogService
@@ -26,6 +30,10 @@ class AppState:
     twilio: TwilioOps
     agent_public_url: str = ""
     cors_origins: list[str] = field(default_factory=list)
+    call_store: FirestoreCallStore | None = None
+    caller_store: FirestoreCallerStore | None = None
+    message_store: FirestoreMessageStore | None = None
+    owner_override_store: FirestoreOwnerOverrideStore | None = None
 
 
 def get_state(request: Request) -> AppState:
