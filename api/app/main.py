@@ -25,11 +25,13 @@ from app.infrastructure.firestore_message_store import FirestoreMessageStore  # 
 from app.infrastructure.firestore_owner_override_store import (  # noqa: E402
     FirestoreOwnerOverrideStore,
 )
+from app.infrastructure.firestore_pickup_state_store import (  # noqa: E402
+    FirestorePickupStateStore,
+)
 from app.infrastructure.firestore_transcript_store import (  # noqa: E402
     FirestoreTranscriptStore,
 )
 from app.infrastructure.logger import configure_logging, get_logger  # noqa: E402
-from app.infrastructure.pickup_state import PickupStateStore  # noqa: E402
 from app.infrastructure.square_client import (  # noqa: E402
     SquareCatalogAdapter,
     SquareLocationsAdapter,
@@ -65,8 +67,6 @@ def _build() -> FastAPI:
         cache=TtlCache(ttl_seconds=5 * 60),
         specials_category_id=settings.square_specials_category_id,
     )
-    pickup_store = PickupStateStore("./data/pickup-state.json")
-    pickup_service = PickupService(store=pickup_store, locations=locations_service)
     twilio: TwilioOps = (
         RealTwilioClient(
             account_sid=settings.twilio_account_sid,
@@ -85,6 +85,8 @@ def _build() -> FastAPI:
     caller_store = FirestoreCallerStore(client=db)
     message_store = FirestoreMessageStore(client=db)
     owner_override_store = FirestoreOwnerOverrideStore(client=db)
+    pickup_store = FirestorePickupStateStore(client=db)
+    pickup_service = PickupService(store=pickup_store, locations=locations_service)
     transcript_store = FirestoreTranscriptStore(client=db)
     daily_stats_store = FirestoreDailyStatsStore(client=db)
 

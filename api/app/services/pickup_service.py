@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from app.domain.models import HoursToday, PickupToday
-from app.infrastructure.pickup_state import PickupRecord, PickupStateStore
+from app.domain.pickup import PickupRecord
+from app.infrastructure.firestore_pickup_state_store import FirestorePickupStateStore
 from app.services.locations_service import LocationsService
 
 
@@ -52,12 +53,14 @@ def _build_summary(name: str, address: str, hours: HoursToday | None) -> str:
 class PickupService:
     """Resolves the active pickup location by combining stored state with live Square data."""
 
-    def __init__(self, store: PickupStateStore, locations: LocationsService) -> None:
+    def __init__(
+        self, store: FirestorePickupStateStore, locations: LocationsService
+    ) -> None:
         self._store = store
         self._locations = locations
 
     async def get_today(self, tenant_slug: str, now: datetime | None = None) -> PickupToday | None:
-        record = await self._store.get(tenant_slug)
+        record = self._store.get(tenant_slug)
         if record is None:
             return None
         all_locations = await self._locations.list_locations()
@@ -75,7 +78,7 @@ class PickupService:
             location_id=match.location_id,
             name=match.name,
             address=match.address,
-            set_at=record.set_at,
+            set_at=record.set_at.isoformat(),
             set_for_date=record.set_for_date,
             hours=hours,
             summary=_build_summary(match.name, match.address, hours),
@@ -88,8 +91,8 @@ class PickupService:
         now = datetime.now(UTC)
         record = PickupRecord(
             location_id=location_id,
-            set_at=now.isoformat(),
+            set_at=now,
             set_for_date=now.date().isoformat(),
         )
-        await self._store.set(tenant_slug, record)
+        self._store.set(tenant_slug, record)
         return record

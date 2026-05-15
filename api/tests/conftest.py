@@ -16,8 +16,8 @@ from app.infrastructure.firestore_caller_store import FirestoreCallerStore
 from app.infrastructure.firestore_daily_stats_store import FirestoreDailyStatsStore
 from app.infrastructure.firestore_message_store import FirestoreMessageStore
 from app.infrastructure.firestore_owner_override_store import FirestoreOwnerOverrideStore
+from app.infrastructure.firestore_pickup_state_store import FirestorePickupStateStore
 from app.infrastructure.firestore_transcript_store import FirestoreTranscriptStore
-from app.infrastructure.pickup_state import PickupStateStore
 from app.infrastructure.tenant_registry import TenantRegistry
 from app.services.catalog_service import CatalogService
 from app.services.locations_service import LocationsService
@@ -97,7 +97,7 @@ def client_factory(
             cache=TtlCache(60),
             specials_category_id="SPECIALS",
         )
-        pickup_store = PickupStateStore(str(tmp_path / "pickup-state.json"))
+        pickup_store = FirestorePickupStateStore(client=db)
         pickup_svc = PickupService(store=pickup_store, locations=loc_svc)
         twilio = FakeTwilioClient()
         admin_verifier = StubFirebaseAuthVerifier(

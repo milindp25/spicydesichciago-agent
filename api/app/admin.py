@@ -20,7 +20,10 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from app.infrastructure.cache import TtlCache  # noqa: E402
 from app.infrastructure.config import AppSettings  # noqa: E402
-from app.infrastructure.pickup_state import PickupStateStore  # noqa: E402
+from app.infrastructure.firestore_client import FirestoreClient  # noqa: E402
+from app.infrastructure.firestore_pickup_state_store import (  # noqa: E402
+    FirestorePickupStateStore,
+)
 from app.infrastructure.square_client import (  # noqa: E402
     SquareLocationsAdapter,
     make_square_client,
@@ -39,8 +42,12 @@ async def _run_pickup(tenant: str) -> int:
         api=SquareLocationsAdapter(sq_client),
         cache=TtlCache(ttl_seconds=60),
     )
+    db = FirestoreClient(
+        project_id=settings.firebase_project_id,
+        service_account_path=settings.firebase_service_account_path,
+    ).db
     pickup_service = PickupService(
-        store=PickupStateStore("./data/pickup-state.json"),
+        store=FirestorePickupStateStore(client=db),
         locations=locations_service,
     )
 
