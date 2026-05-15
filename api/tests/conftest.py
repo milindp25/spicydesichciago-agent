@@ -112,3 +112,37 @@ def client(client_factory: Callable[..., tuple[TestClient, AppState]]) -> Iterat
     c, _ = client_factory()
     with c:
         yield c
+
+
+# --- Firestore emulator fixtures --------------------------------------------
+
+import pytest
+from google.cloud import firestore
+
+from tests.helpers.firestore_emulator import (
+    PROJECT_ID,
+    EmulatorUnavailable,
+    clear_emulator_data,
+    start_emulator,
+    stop_emulator,
+)
+
+
+@pytest.fixture(scope="session")
+def firestore_emulator():
+    """Start the emulator once per test session. Tests opt in by depending
+    on this fixture (directly or transitively via firestore_db)."""
+    try:
+        proc = start_emulator()
+    except EmulatorUnavailable as e:
+        pytest.skip(f"Firestore emulator unavailable: {e}")
+    yield
+    stop_emulator(proc)
+
+
+@pytest.fixture
+def firestore_db(firestore_emulator) -> firestore.Client:
+    """A fresh Firestore client per test, with all collections cleared
+    beforehand. Tests using this fixture are fully isolated."""
+    clear_emulator_data()
+    return firestore.Client(project=PROJECT_ID)
