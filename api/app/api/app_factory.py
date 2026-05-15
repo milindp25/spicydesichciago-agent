@@ -9,6 +9,7 @@ from app.api.dependencies import AppState
 from app.api.routes import (
     address,
     callers,
+    calls,
     events,
     health,
     hours,
@@ -52,5 +53,6 @@ def build_app(deps: AppState) -> FastAPI:
     app.include_router(pickup.router)
     app.include_router(sms.router)
     app.include_router(callers.router)
+    app.include_router(calls.router)
     app.include_router(webhooks_square.router)
     return app
