@@ -25,7 +25,8 @@ class FirestoreMessageStore:
             return None
         return Message.from_firestore(data=snap.to_dict() or {})
 
-    def list_unhandled(self, *, limit: int = 50) -> Iterator[Message]:
+    def list_unhandled(self, *, limit: int = 50) -> Iterator[tuple[str, Message]]:
+        """Yield (doc_id, message) tuples. Doc id is needed for /handle."""
         query = (
             self._db.collection(MESSAGES_COLLECTION)
             .where(filter=firestore.FieldFilter("status", "==", MessageStatus.NEW.value))
@@ -33,7 +34,7 @@ class FirestoreMessageStore:
             .limit(limit)
         )
         for snap in query.stream():
-            yield Message.from_firestore(data=snap.to_dict() or {})
+            yield snap.id, Message.from_firestore(data=snap.to_dict() or {})
 
     def mark_handled(
         self,

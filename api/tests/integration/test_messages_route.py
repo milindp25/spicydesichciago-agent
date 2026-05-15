@@ -42,7 +42,7 @@ def test_messages_records_event_and_sends_sms_to_owner(
     assert state.message_store is not None
     msgs = list(state.message_store.list_unhandled())
     assert len(msgs) == 1
-    msg = msgs[0]
+    _id, msg = msgs[0]
     assert msg.call_sid == "CA1"
     assert msg.caller_phone == "+13125551111"
     assert msg.reason == "catering"

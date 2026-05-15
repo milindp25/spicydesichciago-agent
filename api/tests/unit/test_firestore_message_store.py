@@ -48,7 +48,8 @@ def test_list_unhandled_orders_newest_first(store):
     store.create(later)
 
     msgs = list(store.list_unhandled(limit=10))
-    assert [m.reason for m in msgs] == ["second", "first"]
+    assert [m.reason for _id, m in msgs] == ["second", "first"]
+    assert all(isinstance(id_, str) and id_ for id_, _ in msgs)
 
 
 def test_mark_handled_sets_status_and_metadata(store):

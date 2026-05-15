@@ -22,6 +22,7 @@ from app.api.routes import (
     transfers,
     webhooks_square,
 )
+from app.api.routes.admin import messages as admin_messages
 
 
 def build_app(deps: AppState) -> FastAPI:
@@ -55,4 +56,5 @@ def build_app(deps: AppState) -> FastAPI:
     app.include_router(callers.router)
     app.include_router(calls.router)
     app.include_router(webhooks_square.router)
+    app.include_router(admin_messages.router)
     return app
