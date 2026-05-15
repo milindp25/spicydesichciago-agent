@@ -173,6 +173,43 @@ All `/api/*` endpoints require `X-Tools-Auth: $TOOLS_SHARED_SECRET`. Tenant is s
 | GET | `/healthz` | Liveness (no auth) |
 | POST | `/api/webhooks/square` | Square webhook (HMAC-verified) — invalidates cache |
 
+## Admin API (for dashboard)
+
+All `/api/admin/*` endpoints require:
+- `Authorization: Bearer <firebase-id-token>` header
+- The Firebase Auth account's verified email must be in `ADMIN_ALLOWED_EMAILS` env var (comma-separated)
+
+Rate limiting: 120 requests/minute per IP (IP-only; per-uid limits planned for a future iteration). Configurable via `RATE_LIMIT_DEFAULT` env var. Returns `429` with a JSON body on burst.
+
+### Endpoints
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/admin/messages/unhandled` | — | `{messages: [{id, callSid, callerPhone, callerName, reason, takenAt}]}` |
+| POST | `/api/admin/messages/{id}/handle` | — | `{ok: true, status: "handled"}` |
+| GET | `/api/admin/calls/today` | — | `{calls: [{callSid, startedAt, endedAt, durationMs, callerPhone, outcome, summary, toolsUsed}]}` |
+| GET | `/api/admin/calls/{call_sid}` | — | call object + `{events: [{ts, kind, payload}]}` |
+| GET | `/api/admin/owner-override` | — | `{active, untilIso, reason, setBy, setAt}` |
+| POST | `/api/admin/owner-override` | `{until_iso: ISO8601, reason: str}` | same as GET |
+| DELETE | `/api/admin/owner-override` | — | same as GET (active=false) |
+| GET | `/api/admin/stats/daily?days=7` | — | `{days: [{date, totalCalls, transfersCompleted, transfersFailed, messagesTaken}]}` |
+
+### Configuring the email allowlist
+
+```bash
+fly secrets set ADMIN_ALLOWED_EMAILS="techtastellc@gmail.com,backup-admin@example.com"
+```
+
+Empty allowlist rejects every request — defense vs. misconfiguration.
+
+### Frontend integration notes
+
+- Dashboard obtains the ID token via Firebase Auth client SDK (`firebase.auth().currentUser.getIdToken()`).
+- Token expires in 1 hour; Firebase SDK refreshes automatically.
+- Send fresh token on every request — don't cache server-side beyond the request.
+- 401 → token invalid/expired → trigger SDK re-auth.
+- 403 → email not allowlisted → display a "no access" page.
+
 ## Project status
 
 | Plan | Status | What it covers |
