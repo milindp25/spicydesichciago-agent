@@ -170,6 +170,18 @@ async def run_bot(
 
     transcript_buffer = TranscriptBuffer()
 
+    from pathlib import Path
+
+    from app.event_buffer import EventBuffer
+
+    event_buffer = EventBuffer(
+        post_fn=lambda call_sid, kind, payload: api.append_event(
+            call_sid=call_sid, kind=kind, payload=payload
+        ),
+        fallback_path=Path("/tmp/spicy-desi-failed-events.jsonl"),
+    )
+    await event_buffer.start()
+
     # SummaryGenerator uses a parallel chat-completions client (Groq or
     # OpenAI-compatible). Pipecat's LLM service wraps these but doesn't
     # expose them publicly, so we build a parallel client with the same
@@ -355,4 +367,5 @@ async def run_bot(
                 if summary_text:
                     await api.record_call_summary(call_sid=call_sid, summary=summary_text)
 
+        await event_buffer.stop()
         await api.aclose()
