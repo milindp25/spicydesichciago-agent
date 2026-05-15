@@ -63,6 +63,10 @@ class TransferRequest(BaseModel):
 class TransferDecision(BaseModel):
     action: str
     target: str | None = None
+    # Why a take_message was chosen: "after_hours" (outside weekly window or
+    # day not configured) or "override" (active owner override). None when
+    # transferring, or when the action is unrelated.
+    reason: str | None = None
 
 
 class PickupToday(BaseModel):

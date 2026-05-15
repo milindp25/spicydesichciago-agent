@@ -25,18 +25,21 @@ def test_in_window_returns_transfer() -> None:
     d = decide_transfer(_tenant(), now=monday2pm)
     assert d.action == "transfer"
     assert d.target == "+15555550199"
+    assert d.reason is None
 
 
 def test_outside_window_returns_take_message() -> None:
     monday6am = datetime(2026, 1, 5, 12, 0, tzinfo=UTC)
     d = decide_transfer(_tenant(), now=monday6am)
     assert d.action == "take_message"
+    assert d.reason == "after_hours"
 
 
 def test_no_window_for_day_returns_take_message() -> None:
     sunday = datetime(2026, 1, 4, 18, 0, tzinfo=UTC)
     d = decide_transfer(_tenant(), now=sunday)
     assert d.action == "take_message"
+    assert d.reason == "after_hours"
 
 
 class _StubOverrideStore:
@@ -63,6 +66,7 @@ def test_active_override_forces_take_message() -> None:
     d = decide_transfer(_tenant(), now=monday2pm, owner_override_store=override_store)
     assert d.action == "take_message"
     assert d.target is None
+    assert d.reason == "override"
 
 
 def test_expired_override_falls_through() -> None:
