@@ -20,6 +20,7 @@ from app.infrastructure.tenant_registry import TenantRegistry
 from app.services.catalog_service import CatalogService
 from app.services.locations_service import LocationsService
 from app.services.pickup_service import PickupService
+from tests.helpers.firebase_auth_stub import StubFirebaseAuthVerifier
 from tests.helpers.square_mock import FakeCatalogApi, FakeLocationsApi
 
 SHARED_SECRET = "s" * 32
@@ -97,6 +98,9 @@ def client_factory(
         pickup_store = PickupStateStore(str(tmp_path / "pickup-state.json"))
         pickup_svc = PickupService(store=pickup_store, locations=loc_svc)
         twilio = FakeTwilioClient()
+        admin_verifier = StubFirebaseAuthVerifier(
+            allowed_emails=["techtastellc@gmail.com", "owner@spicydesichicago.com"],
+        )
         state = AppState(
             tools_shared_secret=SHARED_SECRET,
             tenants=registry,
@@ -110,6 +114,7 @@ def client_factory(
             caller_store=FirestoreCallerStore(client=db),
             message_store=FirestoreMessageStore(client=db),
             owner_override_store=FirestoreOwnerOverrideStore(client=db),
+            admin_verifier=admin_verifier,
             agent_public_url=agent_public_url,
             cors_origins=cors_origins or [],
         )

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hmac
 from dataclasses import dataclass, field
+from typing import Any
 
 from fastapi import Header, HTTPException, Request, status
 
+from app.api.middleware.firebase_auth import AuthError, FirebaseAuthVerifier
 from app.infrastructure.firestore_call_store import FirestoreCallStore
 from app.infrastructure.firestore_caller_store import FirestoreCallerStore
 from app.infrastructure.firestore_message_store import FirestoreMessageStore
@@ -30,6 +32,7 @@ class AppState:
     caller_store: FirestoreCallerStore
     message_store: FirestoreMessageStore
     owner_override_store: FirestoreOwnerOverrideStore
+    admin_verifier: FirebaseAuthVerifier
     agent_public_url: str = ""
     cors_origins: list[str] = field(default_factory=list)
 
@@ -47,3 +50,27 @@ def require_tools_auth(
     provided = x_tools_auth or ""
     if not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized")
+
+
+async def require_admin_user(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """FastAPI dependency for /api/admin/* routes. Verifies the Bearer
+    token and returns the decoded Firebase claims (uid, email, etc.).
+
+    Raises:
+        HTTPException(401) on missing/invalid token.
+        HTTPException(403) on email not in allowlist.
+    """
+    state = get_state(request)
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="missing Authorization Bearer token")
+    token = authorization[len("Bearer "):].strip()
+    try:
+        return state.admin_verifier.verify(token)
+    except AuthError as e:
+        msg = str(e).lower()
+        if "not in" in msg or "allowlist" in msg or "not authorized" in msg or "not verified" in msg:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        raise HTTPException(status_code=401, detail=str(e)) from e

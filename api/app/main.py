@@ -7,8 +7,12 @@ from fastapi import FastAPI
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+import firebase_admin  # noqa: E402
+from firebase_admin import credentials as fb_credentials  # noqa: E402
+
 from app.api.app_factory import build_app  # noqa: E402
 from app.api.dependencies import AppState  # noqa: E402
+from app.api.middleware.firebase_auth import FirebaseAuthVerifier  # noqa: E402
 from app.infrastructure.cache import TtlCache  # noqa: E402
 from app.infrastructure.config import AppSettings  # noqa: E402
 from app.infrastructure.firestore_call_store import FirestoreCallStore  # noqa: E402
@@ -75,6 +79,17 @@ def _build() -> FastAPI:
     caller_store = FirestoreCallerStore(client=db)
     message_store = FirestoreMessageStore(client=db)
     owner_override_store = FirestoreOwnerOverrideStore(client=db)
+
+    # Initialize firebase_admin's default app (needed for auth.verify_id_token).
+    # Idempotent: subsequent calls in tests are no-ops via the try/except.
+    if not firebase_admin._apps:  # type: ignore[attr-defined]
+        if settings.firebase_service_account_path:
+            cred = fb_credentials.Certificate(settings.firebase_service_account_path)
+            firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
+        else:
+            firebase_admin.initialize_app(options={"projectId": settings.firebase_project_id})
+
+    admin_verifier = FirebaseAuthVerifier(allowed_emails=settings.admin_allowed_emails_list)
     state = AppState(
         tools_shared_secret=settings.tools_shared_secret,
         tenants=load_tenants(settings.configs_dir),
@@ -90,6 +105,7 @@ def _build() -> FastAPI:
         caller_store=caller_store,
         message_store=message_store,
         owner_override_store=owner_override_store,
+        admin_verifier=admin_verifier,
     )
     return build_app(state)
 
