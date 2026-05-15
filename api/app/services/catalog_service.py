@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from rapidfuzz import fuzz
+
 from app.domain.models import MenuItem
 from app.infrastructure.cache import TtlCache
 from app.infrastructure.square_client import CatalogApi
+
+# Minimum fuzzy-match score (0-100) for an item to count as a query hit.
+# Tuned to catch mispronunciations ("samosaa") and plurals ("samosas")
+# without flooding callers with unrelated results.
+MENU_SEARCH_THRESHOLD = 70
 
 
 def _format_price(amount: int | None, currency: str | None) -> str:
@@ -36,18 +43,34 @@ def _to_menu_item(raw: dict[str, Any], category_names: dict[str, str]) -> MenuIt
     )
 
 
-def _matches_query(item: MenuItem, query: str) -> bool:
+def _score_item(item: MenuItem, query: str) -> int:
+    """Return a 0-100 fuzzy match score for ``item`` against ``query``.
+
+    Combines ``partial_ratio`` (handles single tokens / substrings / minor
+    misspellings) and ``token_set_ratio`` (handles multi-word queries where
+    the words appear in a different order). We score the *name* on its own
+    and the full haystack (name + description + category) separately, then
+    favor the name slightly so a direct name hit ranks above an item that
+    only mentions the query in its description or category.
+    """
     q = query.lower().strip()
     if not q:
-        return True
+        return 0
+    name = item.name.lower()
     haystack = " ".join(
         [
-            item.name.lower(),
+            name,
             (item.description or "").lower(),
             (item.category or "").lower(),
         ]
-    )
-    return q in haystack
+    ).strip()
+    if not haystack:
+        return 0
+    name_score = max(fuzz.partial_ratio(q, name), fuzz.token_set_ratio(q, name)) if name else 0
+    full_score = max(fuzz.partial_ratio(q, haystack), fuzz.token_set_ratio(q, haystack))
+    # Discount non-name hits so a literal name match always sorts above an
+    # item that only mentions the query in its description/category.
+    return int(max(name_score, full_score * 0.9))
 
 
 class CatalogService:
@@ -84,7 +107,13 @@ class CatalogService:
         all_items = await self._cache.get_or_load("all_items", loader)
         cat_names = await self._category_names()
         menu = [_to_menu_item(i, cat_names) for i in all_items]
-        return [m for m in menu if _matches_query(m, query)]
+        if not query.strip():
+            return menu
+        scored = [(m, _score_item(m, query)) for m in menu]
+        scored = [(m, s) for m, s in scored if s >= MENU_SEARCH_THRESHOLD]
+        # Sort by score desc, then alphabetically by name as deterministic tiebreaker.
+        scored.sort(key=lambda ms: (-ms[1], ms[0].name.lower()))
+        return [m for m, _ in scored]
 
     async def list_all_menu(self) -> list[MenuItem]:
         async def loader() -> list[dict[str, Any]]:

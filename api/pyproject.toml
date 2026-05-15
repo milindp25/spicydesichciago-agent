@@ -16,6 +16,7 @@ dependencies = [
   "firebase-admin>=6.5.0",
   "google-cloud-firestore>=2.18.0",
   "slowapi>=0.1.9",
+  "rapidfuzz>=3.5",
 ]
 
 [project.optional-dependencies]
