@@ -21,7 +21,9 @@ async def request_transfer(
     if tenant is None:
         raise HTTPException(404, "tenant not found")
     now_dt = datetime.fromisoformat(now.replace("Z", "+00:00")) if now else None
-    decision = decide_transfer(tenant, now=now_dt)
+    decision = decide_transfer(
+        tenant, now=now_dt, owner_override_store=state.owner_override_store
+    )
 
     redirect_ok = False
     if decision.action == "transfer" and state.agent_public_url:
