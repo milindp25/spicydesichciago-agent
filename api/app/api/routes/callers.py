@@ -9,56 +9,54 @@ from app.api.dependencies import get_state, require_tools_auth
 router = APIRouter(prefix="/api", dependencies=[Depends(require_tools_auth)])
 
 
-def _matches_phone(payload: dict[str, Any], phone: str) -> bool:
-    """Check whether an event payload references the given phone number."""
-    return any(payload.get(key) == phone for key in ("from_phone", "callback_number", "to"))
-
-
 @router.get("/callers/history")
 async def caller_history(
     request: Request,
     phone: str = Query(..., min_length=1),
     limit: int = Query(20, ge=1, le=200),
 ) -> dict[str, Any]:
-    """Return a brief history of prior interactions for a given caller phone.
+    """Return a brief history of prior interactions for a given caller.
 
     Used by the agent at call start so it can greet returning customers
-    differently and recall outstanding messages.
+    differently. Backed by /callers/{phone} aggregate + most recent
+    events from their most recent call.
     """
+    _ = limit  # reserved for future use (event paging); aggregate is single doc today
     state = get_state(request)
-    events = await state.event_log.read_all()
-    matches = []
-    for ev in reversed(events):  # newest first
-        payload = ev.get("payload") or {}
-        if _matches_phone(payload, phone) or ev.get("from_phone") == phone:
-            matches.append(
+    caller = state.caller_store.get(phone)
+    if caller is None:
+        return {
+            "phone": phone,
+            "is_returning": False,
+            "call_count": 0,
+            "events": [],
+        }
+    events: list[dict[str, Any]] = []
+    if caller.last_call_sid:
+        for ev in state.call_store.iter_events(caller.last_call_sid):
+            events.append(
                 {
-                    "ts": ev.get("ts"),
-                    "kind": ev.get("kind"),
-                    "call_sid": ev.get("call_sid"),
-                    "summary": _short_summary(ev),
+                    "ts": ev.ts.timestamp(),
+                    "kind": ev.kind,
+                    "call_sid": caller.last_call_sid,
+                    "summary": _short_summary(ev.kind, ev.payload),
                 }
             )
-            if len(matches) >= limit:
-                break
     return {
         "phone": phone,
-        "is_returning": len(matches) > 0,
-        "call_count": len({m["call_sid"] for m in matches if m["call_sid"]}),
-        "events": matches,
+        "is_returning": True,
+        "call_count": caller.call_count,
+        "events": events,
     }
 
 
-def _short_summary(ev: dict[str, Any]) -> str:
-    kind = ev.get("kind", "")
-    payload = ev.get("payload") or {}
-    if kind == "message_taken":
-        return f"Left a message: {payload.get('reason', '')[:80]}"
-    if kind == "transfer_decided":
-        decision = payload.get("decision") or {}
-        return f"Transfer attempt ({decision.get('action', '?')})"
-    if kind == "sms_link_sent":
+def _short_summary(kind: str, payload: dict[str, Any]) -> str:
+    if kind == "messageTaken":
+        return f"Left a message: {(payload.get('reason') or '')[:80]}"
+    if kind == "transferInitiated":
+        return "Asked to be transferred"
+    if kind == "smsLinkSent":
         return f"Sent {payload.get('kind')} link via SMS"
-    if kind == "call_started":
+    if kind == "callStarted":
         return "Called previously"
     return kind
