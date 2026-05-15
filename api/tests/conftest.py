@@ -12,6 +12,10 @@ from app.api.dependencies import AppState
 from app.domain.models import OwnerAvailable, Tenant
 from app.infrastructure.cache import TtlCache
 from app.infrastructure.event_log import JsonlEventLog
+from app.infrastructure.firestore_call_store import FirestoreCallStore
+from app.infrastructure.firestore_caller_store import FirestoreCallerStore
+from app.infrastructure.firestore_message_store import FirestoreMessageStore
+from app.infrastructure.firestore_owner_override_store import FirestoreOwnerOverrideStore
 from app.infrastructure.pickup_state import PickupStateStore
 from app.infrastructure.tenant_registry import TenantRegistry
 from app.services.catalog_service import CatalogService
@@ -73,6 +77,7 @@ def client_factory(
         catalog_categories: list[dict[str, Any]] | None = None,
         cors_origins: list[str] | None = None,
         agent_public_url: str = "https://agent.example.com",
+        firestore_db: Any | None = None,
     ) -> tuple[TestClient, AppState]:
         tenant = _build_tenant()
         registry = TenantRegistry(
@@ -89,6 +94,18 @@ def client_factory(
         pickup_store = PickupStateStore(str(tmp_path / "pickup-state.json"))
         pickup_svc = PickupService(store=pickup_store, locations=loc_svc)
         twilio = FakeTwilioClient()
+        call_store = FirestoreCallStore(client=firestore_db) if firestore_db is not None else None
+        caller_store = (
+            FirestoreCallerStore(client=firestore_db) if firestore_db is not None else None
+        )
+        message_store = (
+            FirestoreMessageStore(client=firestore_db) if firestore_db is not None else None
+        )
+        owner_override_store = (
+            FirestoreOwnerOverrideStore(client=firestore_db)
+            if firestore_db is not None
+            else None
+        )
         state = AppState(
             tools_shared_secret=SHARED_SECRET,
             tenants=registry,
@@ -101,6 +118,10 @@ def client_factory(
             twilio=twilio,
             agent_public_url=agent_public_url,
             cors_origins=cors_origins or [],
+            call_store=call_store,
+            caller_store=caller_store,
+            message_store=message_store,
+            owner_override_store=owner_override_store,
         )
         return TestClient(build_app(state)), state
 
