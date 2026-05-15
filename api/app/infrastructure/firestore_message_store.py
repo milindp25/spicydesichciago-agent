@@ -36,6 +36,22 @@ class FirestoreMessageStore:
         for snap in query.stream():
             yield snap.id, Message.from_firestore(data=snap.to_dict() or {})
 
+    def find_latest_by_call_sid(self, *, call_sid: str) -> Message | None:
+        """Return the most recent message for a given call_sid, or None.
+
+        Used by callers/history to figure out whether the most recent
+        messageTaken event is still pending or has been handled.
+        """
+        query = (
+            self._db.collection(MESSAGES_COLLECTION)
+            .where(filter=firestore.FieldFilter("callSid", "==", call_sid))
+            .order_by("takenAt", direction=firestore.Query.DESCENDING)
+            .limit(1)
+        )
+        for snap in query.stream():
+            return Message.from_firestore(data=snap.to_dict() or {})
+        return None
+
     def mark_handled(
         self,
         *,

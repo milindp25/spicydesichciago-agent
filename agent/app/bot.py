@@ -55,18 +55,61 @@ def _tools_schema_from_definitions() -> Any:
 
 
 def _format_caller_history(history: dict[str, Any]) -> str:
-    """Render caller-history JSON as a short note for the LLM context."""
+    """Render caller-history JSON as a short note for the LLM context.
+
+    Uses the enriched fields from /api/callers/history when available
+    (last_summary, last_message_reason, last_message_pending, last_sms_kind,
+    recent_menu_queries) to produce 3-5 bullets the LLM can weave into the
+    greeting. Falls back to a single-line message if no rich context.
+    """
     if not history.get("is_returning"):
         return "First-time caller."
-    events = history.get("events") or []
-    lines = [
-        f"Returning caller — {history.get('call_count', 0)} prior call(s). Recent activity:"
-    ]
-    for ev in events[:3]:
-        summary = (ev.get("summary") or ev.get("kind") or "").strip()
-        if summary:
-            lines.append(f"- {summary}")
-    return "\n".join(lines)
+
+    bullets: list[str] = []
+
+    last_summary = (history.get("last_summary") or "").strip()
+    if last_summary:
+        bullets.append(f"- Last call: {last_summary}")
+
+    pending = history.get("last_message_pending")
+    last_reason = (history.get("last_message_reason") or "").strip()
+    if pending is True:
+        if last_reason:
+            bullets.append(
+                f'- Pending: last message ("{last_reason}") still unhandled.'
+            )
+        else:
+            bullets.append("- Pending: a previous message is still unhandled.")
+    elif pending is False and last_reason:
+        bullets.append(
+            f'- Previous message ("{last_reason}") has been handled.'
+        )
+
+    last_sms = (history.get("last_sms_kind") or "").strip()
+    if last_sms:
+        bullets.append(f"- SMS we sent last: {last_sms} link.")
+
+    menu_queries = history.get("recent_menu_queries") or []
+    if menu_queries:
+        bullets.append(
+            f"- Previously asked about: {', '.join(menu_queries)}."
+        )
+
+    call_count = history.get("call_count", 0)
+    header = f"Returning caller — {call_count} prior call(s)."
+    if not bullets:
+        # Fall back to the older event-bullets style if no rich fields.
+        events = history.get("events") or []
+        legacy: list[str] = []
+        for ev in events[:3]:
+            summary = (ev.get("summary") or ev.get("kind") or "").strip()
+            if summary:
+                legacy.append(f"- {summary}")
+        if legacy:
+            return "\n".join([f"{header} Recent activity:"] + legacy)
+        return header
+
+    return "\n".join([f"{header} Recent context:"] + bullets)
 
 
 async def run_bot(
