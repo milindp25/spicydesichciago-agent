@@ -33,10 +33,19 @@ async def take_message(request: Request, body: MessageRequest) -> dict[str, Any]
     sms_sent = await state.twilio.send_sms(to=tenant.owner_phone, body=sms_body)
 
     if tenant.sms_confirmation_to_caller and body.callback_number:
-        confirmation = (
-            f'Thanks for calling Spicy Desi. We got your message about "{body.reason}" '
-            "and will call you back."
-        )
+        reason_snippet = (body.reason or "")[:80]
+        callback_num = (tenant.twilio_number or "").strip()
+        # Skip placeholders like "+15555550100"-ish tokens that look unset.
+        is_placeholder = not callback_num
+        lines = [
+            f'Thanks for calling Spicy Desi. Got your message about "{reason_snippet}"'
+            + (f" — the owner will call you back from {callback_num}." if not is_placeholder else " — the owner will call you back.")
+        ]
+        if not is_placeholder:
+            lines.append(
+                f"Need to reach us sooner? Reply to this text or call {callback_num}."
+            )
+        confirmation = "\n".join(lines)
         await state.twilio.send_sms(to=body.callback_number, body=confirmation)
 
     now = datetime.now(timezone.utc)

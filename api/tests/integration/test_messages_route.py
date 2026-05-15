@@ -37,6 +37,11 @@ def test_messages_records_event_and_sends_sms_to_owner(
 
     caller_msg = state.twilio.sms_calls[1]
     assert caller_msg["to"] == "+13125551111"
+    # New confirmation body: acknowledges reason and surfaces the tenant callback number.
+    caller_body = caller_msg["body"]
+    assert 'about "catering"' in caller_body
+    assert "+15555550100" in caller_body
+    assert "Reply to this text" in caller_body
 
     # Firestore: primary Message record
     assert state.message_store is not None
@@ -61,6 +66,49 @@ def test_messages_records_event_and_sends_sms_to_owner(
     assert call is not None
     assert call.from_number == "+15555550100"
     assert call.caller_phone == "+13125551111"
+
+
+def test_messages_caller_confirmation_truncates_long_reason(
+    client_factory: Callable[..., tuple[TestClient, AppState]],
+    auth_headers: dict[str, str],
+    firestore_db: firestore.Client,
+) -> None:
+    c, state = client_factory(firestore_db=firestore_db)
+    long_reason = "x" * 200
+    r = c.post(
+        "/api/messages",
+        headers=auth_headers,
+        json={"call_sid": "CA1", "callback_number": "+13125551111", "reason": long_reason},
+    )
+    assert r.status_code == 202
+    caller_msg = state.twilio.sms_calls[1]
+    body = caller_msg["body"]
+    # Reason in body should be truncated to 80 chars; 81+ x's must not appear.
+    assert "x" * 80 in body
+    assert "x" * 81 not in body
+    # Total body length stays under 320 chars (2 SMS segments).
+    assert len(body) < 320
+
+
+def test_messages_caller_confirmation_skips_second_line_when_twilio_number_empty(
+    client_factory: Callable[..., tuple[TestClient, AppState]],
+    auth_headers: dict[str, str],
+    firestore_db: firestore.Client,
+) -> None:
+    c, state = client_factory(firestore_db=firestore_db)
+    # Override the tenant in registry to clear twilio_number.
+    tenant = state.tenants.tenants["spicy-desi"]
+    tenant.twilio_number = ""
+    r = c.post(
+        "/api/messages",
+        headers=auth_headers,
+        json={"call_sid": "CA1", "callback_number": "+13125551111", "reason": "catering"},
+    )
+    assert r.status_code == 202
+    caller_msg = state.twilio.sms_calls[1]
+    body = caller_msg["body"]
+    assert "Reply to this text" not in body
+    assert 'about "catering"' in body
 
 
 def test_messages_requires_callback_number(
