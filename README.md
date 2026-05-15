@@ -119,11 +119,13 @@ If you have a pre-Firestore `events.jsonl`, replay it once:
 
 ```bash
 cd api
-.venv/bin/python -m scripts.backfill_events_jsonl ./events.jsonl --dry-run    # preview
-.venv/bin/python -m scripts.backfill_events_jsonl ./events.jsonl              # write
+FIREBASE_SERVICE_ACCOUNT_PATH=$HOME/.config/spicy-desi/firebase-admin.json \
+.venv/bin/python -m scripts.backfill_jsonl_to_firestore ./data/events.jsonl --dry-run   # preview
+FIREBASE_SERVICE_ACCOUNT_PATH=$HOME/.config/spicy-desi/firebase-admin.json \
+.venv/bin/python -m scripts.backfill_jsonl_to_firestore ./data/events.jsonl             # write
 ```
 
-The script is idempotent (uses deterministic doc IDs derived from call SID + event timestamp), so re-running won't duplicate data.
+Safe to re-run: pass `--clear` to wipe and reload (DESTRUCTIVE — only operates on `calls`, `callers`, `messages` collections; the dashboard's 8 collections are never touched). The script also aborts on startup if it sees dashboard-owned field names (`actorUid`, `squareItemId`, etc.) in the target collections — a tripwire against pointing it at the wrong project.
 
 ## Architecture
 
@@ -137,7 +139,7 @@ api/                  Presentation layer (FastAPI routes)
 services/             Business logic
 domain/               Pydantic models — zero deps
 infrastructure/       Adapters: config, logger, cache, Square SDK,
-                      tenant registry, JSONL event log
+                      tenant registry, Firestore stores
 ```
 
 ## API endpoints (Plan 1)
@@ -151,7 +153,7 @@ All `/api/*` endpoints require `X-Tools-Auth: $TOOLS_SHARED_SECRET`. Tenant is s
 | GET | `/api/pickup/today` | Today's active pickup spot — name, address, hours, speakable summary |
 | GET | `/api/menu/search?q=` | Menu search via Square Catalog |
 | GET | `/api/specials` | Today's specials (from tenant config) |
-| POST | `/api/messages` | Record a take-message; appends to JSONL (Twilio SMS in Plan 2) |
+| POST | `/api/messages` | Record a take-message; writes to Firestore `/messages` + mirrors as a `/calls/{sid}/events/messageTaken` event |
 | POST | `/api/transfers` | Decide transfer-vs-take-message based on owner-available hours |
 | POST | `/api/calls/{sid}/event` | Generic call-event log append |
 
