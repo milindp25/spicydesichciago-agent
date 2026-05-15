@@ -15,6 +15,57 @@ from app.security.twilio_signature import TwilioSignatureVerifier
 log = logging.getLogger(__name__)
 
 
+# Map DTMF digit -> language code. 1=en, 2=hi, 3=te. Anything else -> en.
+_DIGIT_TO_LANGUAGE: dict[str, str] = {"1": "en", "2": "hi", "3": "te"}
+
+
+def _connect_stream_twiml(host: str, from_param: str, language: str) -> str:
+    """Build the <Connect><Stream> TwiML, passing caller phone + language
+    through to the Pipecat side via Stream <Parameter> elements (read on the
+    start event)."""
+    params: list[str] = []
+    if from_param:
+        params.append(f"      <Parameter name=\"from\" value={quoteattr(from_param)}/>")
+    params.append(f"      <Parameter name=\"language\" value={quoteattr(language)}/>")
+    params_xml = "\n".join(params) + "\n"
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<Response>\n"
+        "  <Connect>\n"
+        f'    <Stream url="wss://{host}/twilio/stream">\n'
+        f"{params_xml}"
+        "    </Stream>\n"
+        "  </Connect>\n"
+        "</Response>"
+    )
+
+
+def _dtmf_gather_twiml(host: str) -> str:
+    """Build the DTMF language-selection TwiML. The prompt uses plain Latin
+    transliteration for Hindi/Telugu so Twilio's en-US <Say> can pronounce it
+    cleanly without an IPA/voice-language swap.
+
+    On timeout (no digit), <Redirect> falls through to /twilio/inbound-language
+    with Digits=1, defaulting to English.
+    """
+    del host  # host not needed at the gather step — action is path-relative.
+    prompt = (
+        "Welcome to Spicy Desi. For English, press 1. "
+        "Hindi ke liye, 2 dabaen. Telugu kosam, 3 nokkandi. "
+        "Or stay on the line for English."
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<Response>\n"
+        '  <Gather numDigits="1" timeout="3" '
+        'action="/twilio/inbound-language" method="POST">\n'
+        f'    <Say voice="alice" language="en-US">{prompt}</Say>\n'
+        "  </Gather>\n"
+        '  <Redirect method="POST">/twilio/inbound-language?Digits=1</Redirect>\n'
+        "</Response>"
+    )
+
+
 def _full_url(request: Request) -> str:
     """Reconstruct the absolute URL Twilio signed.
 
@@ -62,22 +113,42 @@ def build_app(settings: AgentSettings) -> FastAPI:
         form = await request.form()
         from_phone = form.get("From")
         host = request.headers.get("host", "")
-        # Pass the caller's phone number through to the WebSocket via a
-        # Twilio Stream <Parameter>. The Pipecat side reads this from the
-        # `start` event's customParameters.
-        from_param = (from_phone or "").strip()
-        param_xml = f"    <Parameter name=\"from\" value={quoteattr(from_param)}/>\n" if from_param else ""
-        twiml = (
-            '<?xml version="1.0" encoding="UTF-8"?>\n'
-            "<Response>\n"
-            "  <Connect>\n"
-            f'    <Stream url="wss://{host}/twilio/stream">\n'
-            f"{param_xml}"
-            "    </Stream>\n"
-            "  </Connect>\n"
-            "</Response>"
+        from_param = (str(from_phone) if from_phone else "").strip()
+
+        enabled = settings.languages_enabled or ["en"]
+        if len(enabled) <= 1:
+            # Single-language deploy: skip the DTMF gather entirely and pass
+            # the lone configured language straight through.
+            return PlainTextResponse(
+                _connect_stream_twiml(host, from_param, language=enabled[0]),
+                media_type="application/xml",
+            )
+        # Multi-language: play the DTMF gather. The from-number is dropped
+        # at this hop (Twilio doesn't carry it through Gather), which is fine
+        # because /twilio/inbound-language re-receives From in its form post.
+        return PlainTextResponse(_dtmf_gather_twiml(host), media_type="application/xml")
+
+    @app.post("/twilio/inbound-language")
+    async def twilio_inbound_language(request: Request) -> PlainTextResponse:
+        await _verify_twilio(request)
+        form = await request.form()
+        digit = str(form.get("Digits") or "").strip()
+        from_phone = form.get("From")
+        host = request.headers.get("host", "")
+        from_param = (str(from_phone) if from_phone else "").strip()
+
+        enabled = settings.languages_enabled or ["en"]
+        # Map the digit to a language. Unknown/empty digit -> English.
+        language = _DIGIT_TO_LANGUAGE.get(digit, "en")
+        # If the caller asked for a language we don't have enabled, fall back
+        # to the first enabled language (typically English).
+        if language not in enabled:
+            language = enabled[0]
+
+        return PlainTextResponse(
+            _connect_stream_twiml(host, from_param, language=language),
+            media_type="application/xml",
         )
-        return PlainTextResponse(twiml, media_type="application/xml")
 
     def _take_message_twiml(host: str, say: str) -> str:
         return (
@@ -226,6 +297,7 @@ def build_app(settings: AgentSettings) -> FastAPI:
         stream_sid: str | None = None
         call_sid: str | None = None
         from_phone: str = ""
+        language: str = "en"
         for _ in range(3):
             msg = await ws.receive_text()
             data = json.loads(msg)
@@ -235,6 +307,7 @@ def build_app(settings: AgentSettings) -> FastAPI:
                 call_sid = start.get("callSid", "")
                 custom = start.get("customParameters") or {}
                 from_phone = (custom.get("from") or "").strip()
+                language = (custom.get("language") or "en").strip() or "en"
                 break
 
         if not stream_sid:
@@ -244,7 +317,12 @@ def build_app(settings: AgentSettings) -> FastAPI:
 
         log.info(
             "twilio stream started",
-            extra={"stream_sid": stream_sid, "call_sid": call_sid, "from": from_phone},
+            extra={
+                "stream_sid": stream_sid,
+                "call_sid": call_sid,
+                "from": from_phone,
+                "language": language,
+            },
         )
         await run_bot(
             ws,
@@ -252,6 +330,7 @@ def build_app(settings: AgentSettings) -> FastAPI:
             stream_sid=stream_sid,
             call_sid=call_sid or "",
             from_phone=from_phone,
+            language=language,
         )
 
     return app

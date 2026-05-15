@@ -36,8 +36,18 @@ VAD_STOP_SECS = 0.6  # was 0.4 — gives callers room to breathe mid-sentence
 VAD_START_SECS = 0.2
 
 
-def load_system_prompt() -> str:
-    return (Path(__file__).parent / "prompts" / "system.md").read_text()
+def load_system_prompt(language: str = "en") -> str:
+    """Read the system prompt for the requested language.
+
+    Falls back to system.en.md if a per-language file is missing. The hi/te
+    files are currently English placeholders with a REVIEW BEFORE PRODUCTION
+    banner header — see prompts/system.hi.md and prompts/system.te.md.
+    """
+    prompts_dir = Path(__file__).parent / "prompts"
+    candidate = prompts_dir / f"system.{language}.md"
+    if not candidate.exists():
+        candidate = prompts_dir / "system.en.md"
+    return candidate.read_text()
 
 
 def _tools_schema_from_definitions() -> Any:
@@ -125,6 +135,7 @@ async def run_bot(
     stream_sid: str,
     call_sid: str,
     from_phone: str = "",
+    language: str = "en",
 ) -> None:
     """Build and run the Pipecat voice-agent pipeline for a single call."""
     from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -187,9 +198,23 @@ async def run_bot(
         ),
     )
 
+    # Resolve per-language STT + TTS knobs. Unknown language -> English.
+    deepgram_language_map = {
+        "en": settings.deepgram_language_en,
+        "hi": settings.deepgram_language_hi,
+        "te": settings.deepgram_language_te,
+    }
+    cartesia_voice_map = {
+        "en": settings.cartesia_voice_id,
+        "hi": settings.cartesia_voice_id_hi or settings.cartesia_voice_id,
+        "te": settings.cartesia_voice_id_te or settings.cartesia_voice_id,
+    }
+    stt_language = deepgram_language_map.get(language, settings.deepgram_language_en)
+    tts_voice = cartesia_voice_map.get(language, settings.cartesia_voice_id)
+
     stt = DeepgramSTTService(
         api_key=settings.deepgram_api_key,
-        settings=DeepgramSTTSettings(model="nova-3", language="en-US"),
+        settings=DeepgramSTTSettings(model="nova-3", language=stt_language),
     )
     if settings.llm_base_url:
         # OpenAI-compatible endpoint — Ollama, LM Studio, vLLM, OpenRouter, etc.
@@ -210,7 +235,7 @@ async def run_bot(
     tts = CartesiaTTSService(
         api_key=settings.cartesia_api_key,
         settings=CartesiaTTSSettings(
-            voice=settings.cartesia_voice_id,
+            voice=tts_voice,
             model="sonic-2",
         ),
     )
@@ -307,7 +332,7 @@ async def run_bot(
     tools = _tools_schema_from_definitions()
     context = LLMContext(
         messages=[
-            {"role": "system", "content": load_system_prompt()},
+            {"role": "system", "content": load_system_prompt(language=language)},
             {
                 "role": "system",
                 "content": (
