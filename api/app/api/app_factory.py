@@ -25,6 +25,7 @@ from app.api.routes import (
 from app.api.routes.admin import calls as admin_calls
 from app.api.routes.admin import messages as admin_messages
 from app.api.routes.admin import owner_override as admin_owner_override
+from app.api.routes.admin import stats as admin_stats
 
 
 def build_app(deps: AppState) -> FastAPI:
@@ -61,4 +62,5 @@ def build_app(deps: AppState) -> FastAPI:
     app.include_router(admin_messages.router)
     app.include_router(admin_calls.router)
     app.include_router(admin_owner_override.router)
+    app.include_router(admin_stats.router)
     return app
