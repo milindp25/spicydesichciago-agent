@@ -38,6 +38,7 @@ class AppSettings(BaseSettings):
 
     firebase_service_account_path: str = Field("", alias="FIREBASE_SERVICE_ACCOUNT_PATH")
     firebase_project_id: str = Field("spicy-desi-chicago", alias="FIREBASE_PROJECT_ID")
+    admin_allowed_emails: str = Field("", alias="ADMIN_ALLOWED_EMAILS")
 
     agent_public_url: str = Field("", alias="AGENT_PUBLIC_URL")
 
@@ -46,3 +47,7 @@ class AppSettings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def admin_allowed_emails_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.admin_allowed_emails.split(",") if e.strip()]
