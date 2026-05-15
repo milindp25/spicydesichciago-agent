@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+from datetime import datetime
 from typing import Any
 
 import httpx
+
+log = logging.getLogger(__name__)
 
 
 class ApiClient:
@@ -102,6 +106,62 @@ class ApiClient:
             f"/api/calls/{call_sid}/event",
             json={"kind": kind, "payload": payload},
         )
+
+    async def record_call_start(
+        self,
+        *,
+        call_sid: str,
+        started_at: datetime,
+        caller_phone: str,
+        from_number: str,
+    ) -> None:
+        """Best-effort: record call start. Never raises."""
+        try:
+            await self._client.post(
+                f"/api/calls/{call_sid}/start",
+                json={
+                    "started_at": started_at.isoformat(),
+                    "caller_phone": caller_phone,
+                    "from_number": from_number,
+                },
+            )
+        except Exception:
+            log.exception("record_call_start failed for %s", call_sid)
+
+    async def record_call_end(
+        self,
+        *,
+        call_sid: str,
+        ended_at: datetime,
+        outcome: str,
+        duration_ms: int,
+        caller_phone: str = "",
+        from_number: str = "",
+    ) -> None:
+        """Best-effort: record call end. Never raises."""
+        try:
+            await self._client.post(
+                f"/api/calls/{call_sid}/end",
+                json={
+                    "ended_at": ended_at.isoformat(),
+                    "outcome": outcome,
+                    "duration_ms": duration_ms,
+                    "caller_phone": caller_phone,
+                    "from_number": from_number,
+                },
+            )
+        except Exception:
+            log.exception("record_call_end failed for %s", call_sid)
+
+    async def record_call_summary(self, *, call_sid: str, summary: str) -> None:
+        """Best-effort: record call summary. Never raises."""
+        try:
+            await self._client.post(
+                f"/api/calls/{call_sid}/summary",
+                json={"summary": summary},
+            )
+        except Exception:
+            log.exception("record_call_summary failed for %s", call_sid)
 
     async def aclose(self) -> None:
         await self._client.aclose()

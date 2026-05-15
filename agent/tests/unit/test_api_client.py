@@ -101,3 +101,90 @@ async def test_request_transfer_posts_call_sid() -> None:
 
     body = json.loads(req.content)
     assert body == {"call_sid": "CA9", "reason": "needs owner"}
+
+
+import json
+from datetime import datetime, timezone
+
+
+async def test_record_call_start_posts_to_start_route() -> None:
+    api = FakeApi(json_responder({"ok": True}))
+    c = _client(api)
+    try:
+        await c.record_call_start(
+            call_sid="CA1",
+            started_at=datetime(2026, 5, 14, 12, 0, tzinfo=timezone.utc),
+            caller_phone="+15551234567",
+            from_number="+15559998888",
+        )
+    finally:
+        await c.aclose()
+    req = api.requests[-1]
+    assert req.url.path == "/api/calls/CA1/start"
+    assert req.method == "POST"
+    body = json.loads(req.content)
+    assert body["caller_phone"] == "+15551234567"
+    assert body["from_number"] == "+15559998888"
+    assert body["started_at"].startswith("2026-05-14T12:00:00")
+
+
+async def test_record_call_end_posts_end_route() -> None:
+    api = FakeApi(json_responder({"ok": True}))
+    c = _client(api)
+    try:
+        await c.record_call_end(
+            call_sid="CA1",
+            ended_at=datetime(2026, 5, 14, 12, 1, 30, tzinfo=timezone.utc),
+            outcome="resolved",
+            duration_ms=90000,
+        )
+    finally:
+        await c.aclose()
+    req = api.requests[-1]
+    assert req.url.path == "/api/calls/CA1/end"
+    body = json.loads(req.content)
+    assert body["outcome"] == "resolved"
+    assert body["duration_ms"] == 90000
+
+
+async def test_record_call_summary_posts_summary_route() -> None:
+    api = FakeApi(json_responder({"ok": True}))
+    c = _client(api)
+    try:
+        await c.record_call_summary(
+            call_sid="CA1",
+            summary="Asked about hours and momos; sent order link",
+        )
+    finally:
+        await c.aclose()
+    req = api.requests[-1]
+    assert req.url.path == "/api/calls/CA1/summary"
+    body = json.loads(req.content)
+    assert body["summary"] == "Asked about hours and momos; sent order link"
+
+
+async def test_lifecycle_methods_swallow_http_errors() -> None:
+    """Returns 500 — methods must not raise (best-effort, called on hangup)."""
+    import httpx
+
+    def failing_responder(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"detail": "boom"})
+
+    api = FakeApi(failing_responder)
+    c = _client(api)
+    try:
+        await c.record_call_start(
+            call_sid="CA1",
+            started_at=datetime(2026, 5, 14, 12, 0, tzinfo=timezone.utc),
+            caller_phone="+15551234567",
+            from_number="+15559998888",
+        )
+        await c.record_call_end(
+            call_sid="CA1",
+            ended_at=datetime(2026, 5, 14, 12, 1, tzinfo=timezone.utc),
+            outcome="failed",
+            duration_ms=60000,
+        )
+        await c.record_call_summary(call_sid="CA1", summary="test")
+    finally:
+        await c.aclose()
