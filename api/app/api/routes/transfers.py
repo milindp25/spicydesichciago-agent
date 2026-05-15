@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.api.dependencies import get_state, require_tools_auth
+from app.domain.call import CallEvent
 from app.domain.models import TransferRequest
 from app.services.transfer_decision_service import decide_transfer
 
@@ -29,5 +30,20 @@ async def request_transfer(
     if decision.action == "transfer" and state.agent_public_url:
         twiml_url = f"{state.agent_public_url}/twilio/dial-owner?to={tenant.owner_phone}"
         redirect_ok = await state.twilio.redirect_call(call_sid=body.call_sid, twiml_url=twiml_url)
+
+    state.call_store.append_event(
+        call_sid=body.call_sid,
+        event=CallEvent(
+            ts=datetime.now(timezone.utc),
+            kind="transferDecided",
+            payload={
+                "decision": decision.model_dump(),
+                "reason": body.reason,
+                "redirect_ok": redirect_ok,
+            },
+        ),
+        caller_phone_for_upsert="+0",
+        from_number_for_upsert="+0",
+    )
 
     return {**decision.model_dump(), "redirect_ok": redirect_ok}

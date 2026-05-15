@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 from fastapi.testclient import TestClient
+from google.cloud import firestore
 
 from app.api.dependencies import AppState
 
@@ -8,8 +9,9 @@ from app.api.dependencies import AppState
 def test_returns_take_message_outside_hours(
     client_factory: Callable[..., tuple[TestClient, AppState]],
     auth_headers: dict[str, str],
+    firestore_db: firestore.Client,
 ) -> None:
-    c, state = client_factory()
+    c, state = client_factory(firestore_db=firestore_db)
     r = c.post(
         "/api/transfers?now=2026-05-03T09:00:00Z",
         headers=auth_headers,
@@ -21,6 +23,13 @@ def test_returns_take_message_outside_hours(
     assert body["redirect_ok"] is False
     # No live-call redirect when we decide to take a message instead.
     assert state.twilio.redirects == []
+
+    # Firestore: transferDecided event written under /calls/CA1/events.
+    events = list(state.call_store.iter_events("CA1"))
+    assert len(events) == 1
+    assert events[0].kind == "transferDecided"
+    assert events[0].payload["decision"]["action"] == "take_message"
+    assert events[0].payload["reason"] == "owner please"
 
 
 def test_returns_transfer_in_hours(

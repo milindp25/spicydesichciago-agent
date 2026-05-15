@@ -2,6 +2,7 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi.testclient import TestClient
+from google.cloud import firestore
 
 from app.api.dependencies import AppState
 
@@ -35,8 +36,9 @@ def _set_pickup(c: TestClient, headers: dict[str, str]) -> None:
 def test_send_order_link_sms(
     client_factory: Callable[..., tuple[TestClient, AppState]],
     auth_headers: dict[str, str],
+    firestore_db: firestore.Client,
 ) -> None:
-    c, state = client_factory(locations=LOC)
+    c, state = client_factory(locations=LOC, firestore_db=firestore_db)
     r = c.post(
         "/api/sms/send-link",
         headers=auth_headers,
@@ -45,6 +47,14 @@ def test_send_order_link_sms(
     assert r.status_code == 202
     assert state.twilio.sms_calls[0]["to"] == "+13125551111"
     assert "order.spicydesi.com" in state.twilio.sms_calls[0]["body"]
+
+    # Firestore: smsLinkSent event written under /calls/CA1/events.
+    events = list(state.call_store.iter_events("CA1"))
+    assert len(events) == 1
+    assert events[0].kind == "smsLinkSent"
+    assert events[0].payload["kind"] == "order"
+    assert events[0].payload["to"] == "+13125551111"
+    assert events[0].payload["sms_sent"] is True
 
 
 def test_send_location_link_sms(

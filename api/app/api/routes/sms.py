@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import urllib.parse
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_state, require_tools_auth
+from app.domain.call import CallEvent
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_tools_auth)])
 
@@ -35,6 +37,7 @@ async def send_link(request: Request, body: SmsLinkRequest) -> dict[str, Any]:
             f"Order from {tenant.name} here: {tenant.order_url}\n"
             "Thanks for calling!"
         )
+        link = tenant.order_url
     else:  # location
         pickup = await state.pickup_service.get_today("spicy-desi")
         if pickup is None or not pickup.address:
@@ -44,6 +47,19 @@ async def send_link(request: Request, body: SmsLinkRequest) -> dict[str, Any]:
             f"{pickup.address}\n"
             f"{_maps_url(pickup.address)}"
         )
+        link = _maps_url(pickup.address)
 
     sms_sent = await state.twilio.send_sms(to=body.to, body=sms_body)
+
+    state.call_store.append_event(
+        call_sid=body.call_sid,
+        event=CallEvent(
+            ts=datetime.now(timezone.utc),
+            kind="smsLinkSent",
+            payload={"to": body.to, "kind": body.kind, "sms_sent": sms_sent, "link": link},
+        ),
+        caller_phone_for_upsert=body.to or "+0",
+        from_number_for_upsert="+0",
+    )
+
     return {"ok": sms_sent, "kind": body.kind, "sent_to": body.to}
