@@ -10,14 +10,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from app.config import AgentSettings
 from app.intents import OwnerShortcut
+from app.summary import SummaryGenerator
 from app.tools.api_client import ApiClient
 from app.tools.definitions import TOOL_DEFINITIONS
 from app.tools.handlers import handle_tool_call
+from app.transcript_buffer import TranscriptBuffer
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +96,24 @@ async def run_bot(
         FastAPIWebsocketParams,
         FastAPIWebsocketTransport,
     )
+    from pipecat.frames.frames import Frame, LLMTextFrame, TranscriptionFrame
+    from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+
+    class _TranscriptTap(FrameProcessor):
+        """Snoop TranscriptionFrame (user) and LLMTextFrame (assistant) into
+        TranscriptBuffer without modifying the frame stream."""
+
+        def __init__(self, buf: TranscriptBuffer) -> None:
+            super().__init__()
+            self._buf = buf
+
+        async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+            await super().process_frame(frame, direction)
+            if isinstance(frame, TranscriptionFrame):
+                self._buf.add_user(getattr(frame, "text", None))
+            elif isinstance(frame, LLMTextFrame):
+                self._buf.add_assistant(getattr(frame, "text", None))
+            await self.push_frame(frame, direction)
 
     serializer = TwilioFrameSerializer(
         stream_sid=stream_sid,
@@ -145,6 +166,29 @@ async def run_bot(
         base_url=settings.tools_api_base,
         secret=settings.tools_shared_secret,
         tenant=settings.default_tenant,
+    )
+
+    transcript_buffer = TranscriptBuffer()
+
+    # SummaryGenerator uses a parallel chat-completions client (Groq or
+    # OpenAI-compatible). Pipecat's LLM service wraps these but doesn't
+    # expose them publicly, so we build a parallel client with the same
+    # config. Imports are lazy to preserve the module-level-light pattern.
+    if settings.llm_base_url:
+        from openai import AsyncOpenAI
+
+        summary_client: Any = AsyncOpenAI(
+            api_key=settings.llm_api_key or "not-needed",
+            base_url=settings.llm_base_url,
+        )
+    else:
+        from groq import AsyncGroq
+
+        summary_client = AsyncGroq(api_key=settings.groq_api_key)
+
+    summary_gen = SummaryGenerator(
+        llm_client=summary_client,
+        model=settings.llm_model or "llama-3.3-70b-versatile",
     )
 
     # Best-effort caller history lookup. Failure is non-fatal (e.g. API down,
@@ -212,9 +256,11 @@ async def run_bot(
         [
             transport.input(),
             stt,
+            _TranscriptTap(transcript_buffer),
             owner_shortcut,  # short-circuits "connect me to the owner" before LLM
             aggregators.user(),
             llm,
+            _TranscriptTap(transcript_buffer),
             tts,
             transport.output(),
             aggregators.assistant(),
@@ -231,6 +277,7 @@ async def run_bot(
     )
 
     timeout_task: asyncio.Task | None = None
+    started_at: datetime | None = None
 
     async def _force_transfer_after_timeout() -> None:
         try:
@@ -260,7 +307,15 @@ async def run_bot(
 
     @transport.event_handler("on_client_connected")
     async def _on_connected(_t: Any, _client: Any) -> None:
-        nonlocal timeout_task
+        nonlocal timeout_task, started_at
+        started_at = datetime.now(timezone.utc)
+        # Best-effort lifecycle: record call start (errors logged + swallowed)
+        await api.record_call_start(
+            call_sid=call_sid,
+            started_at=started_at,
+            caller_phone=from_phone or "+0",
+            from_number="",
+        )
         context.add_message({"role": "user", "content": "Greet the caller now."})
         await task.queue_frames([LLMRunFrame()])
         timeout_task = asyncio.create_task(_force_transfer_after_timeout())
@@ -277,4 +332,27 @@ async def run_bot(
     finally:
         if timeout_task and not timeout_task.done():
             timeout_task.cancel()
+
+        # Lifecycle close: record end + summary (best-effort, never raise)
+        if started_at is not None:
+            ended_at = datetime.now(timezone.utc)
+            duration_ms = int((ended_at - started_at).total_seconds() * 1000)
+            # Outcome detection is rough on this pass; defaults to "resolved".
+            # Plan 3 refines this by tracking the last significant event.
+            await api.record_call_end(
+                call_sid=call_sid,
+                ended_at=ended_at,
+                outcome="resolved",
+                duration_ms=duration_ms,
+                caller_phone=from_phone or "+0",
+                from_number="",
+            )
+
+            # Generate summary (best-effort — empty transcript returns ""
+            # via SummaryGenerator; we then skip the summary write).
+            if len(transcript_buffer) > 0:
+                summary_text = await summary_gen.generate(transcript_buffer.as_text())
+                if summary_text:
+                    await api.record_call_summary(call_sid=call_sid, summary=summary_text)
+
         await api.aclose()
