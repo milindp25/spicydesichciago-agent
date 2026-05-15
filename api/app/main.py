@@ -12,6 +12,13 @@ from app.api.dependencies import AppState  # noqa: E402
 from app.infrastructure.cache import TtlCache  # noqa: E402
 from app.infrastructure.config import AppSettings  # noqa: E402
 from app.infrastructure.event_log import JsonlEventLog  # noqa: E402
+from app.infrastructure.firestore_call_store import FirestoreCallStore  # noqa: E402
+from app.infrastructure.firestore_caller_store import FirestoreCallerStore  # noqa: E402
+from app.infrastructure.firestore_client import FirestoreClient  # noqa: E402
+from app.infrastructure.firestore_message_store import FirestoreMessageStore  # noqa: E402
+from app.infrastructure.firestore_owner_override_store import (  # noqa: E402
+    FirestoreOwnerOverrideStore,
+)
 from app.infrastructure.logger import configure_logging, get_logger  # noqa: E402
 from app.infrastructure.pickup_state import PickupStateStore  # noqa: E402
 from app.infrastructure.square_client import (  # noqa: E402
@@ -60,6 +67,15 @@ def _build() -> FastAPI:
         if settings.twilio_account_sid
         else NoopTwilioClient()
     )
+    firestore_client = FirestoreClient(
+        project_id=settings.firebase_project_id,
+        service_account_path=settings.firebase_service_account_path,
+    )
+    db = firestore_client.db
+    call_store = FirestoreCallStore(client=db)
+    caller_store = FirestoreCallerStore(client=db)
+    message_store = FirestoreMessageStore(client=db)
+    owner_override_store = FirestoreOwnerOverrideStore(client=db)
     state = AppState(
         tools_shared_secret=settings.tools_shared_secret,
         tenants=load_tenants(settings.configs_dir),
@@ -72,6 +88,10 @@ def _build() -> FastAPI:
         twilio=twilio,
         agent_public_url=settings.agent_public_url,
         cors_origins=settings.cors_origin_list,
+        call_store=call_store,
+        caller_store=caller_store,
+        message_store=message_store,
+        owner_override_store=owner_override_store,
     )
     return build_app(state)
 
