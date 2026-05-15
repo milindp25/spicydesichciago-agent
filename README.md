@@ -72,6 +72,59 @@ All hermetic — no live Square / Twilio / Groq calls.
 - **Production gate**: when `APP_ENV=production` and `TWILIO_AUTH_TOKEN` is empty, the agent refuses to boot (RuntimeError). This prevents a "forgot the secret" deploy from silently running with signature verification disabled. In `APP_ENV=development` (the local default) an empty token logs a WARN and the verifier accepts all requests — fine for local dev where Twilio isn't in the picture.
 - CORS pinned to `https://spicydesichicago.com` on the API.
 
+## Firestore persistence
+
+Operational data (calls, callers, messages, owner-override decisions, transfer audit) lives in **Cloud Firestore**. The legacy `events.jsonl` file is no longer written.
+
+### Collections
+
+| Collection                  | Doc ID                                | Notes                                                                  |
+| --------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| `calls`                     | Twilio `CallSid`                      | One doc per call; `events/` subcollection holds the per-call timeline. |
+| `calls/{sid}/events`        | auto-id                               | Append-only `CallEvent` log (started, transferDecided, smsLinkSent…).  |
+| `callers`                   | E.164 phone (`+13125550123`)          | `callCount` is incremented transactionally on each new call.           |
+| `messages`                  | auto-id                               | Inbound SMS + owner replies; `handled` flag drives the unhandled list. |
+| `ownerOverrides`            | `singleton`                           | Single doc holding the active transfer policy override.                |
+
+### Local development (Firestore emulator)
+
+```bash
+brew install firebase-cli
+brew install openjdk@17        # the emulator's Java runtime
+firebase emulators:start --only firestore
+```
+
+Tests pick up `FIRESTORE_EMULATOR_HOST` automatically — no service-account JSON needed locally. The session-scoped pytest fixture in `api/tests/conftest.py` clears the emulator between tests.
+
+### Production credentials
+
+The API resolves credentials in this order:
+
+1. `FIRESTORE_EMULATOR_HOST` set → use the emulator (no creds).
+2. `FIREBASE_SERVICE_ACCOUNT_PATH` points at a readable JSON file → load it.
+3. Otherwise → fall back to ambient ADC (Cloud Run, GCE, Workload Identity).
+
+For Docker / docker-compose, set `FIREBASE_SERVICE_ACCOUNT_HOST_PATH` on the host; it's bind-mounted read-only into the api container at `/run/firebase/sa.json`. For Fly.io, store the JSON as a multiline secret:
+
+```bash
+fly secrets set FIREBASE_SERVICE_ACCOUNT_JSON="$(cat firebase-admin.json)"
+# then in the container, write it to /run/firebase/sa.json at boot
+```
+
+`FIREBASE_PROJECT_ID` is always required.
+
+### Backfill from legacy JSONL
+
+If you have a pre-Firestore `events.jsonl`, replay it once:
+
+```bash
+cd api
+.venv/bin/python -m scripts.backfill_events_jsonl ./events.jsonl --dry-run    # preview
+.venv/bin/python -m scripts.backfill_events_jsonl ./events.jsonl              # write
+```
+
+The script is idempotent (uses deterministic doc IDs derived from call SID + event timestamp), so re-running won't duplicate data.
+
 ## Architecture
 
 N-tier (Hexagonal) — dependencies flow inward only:
